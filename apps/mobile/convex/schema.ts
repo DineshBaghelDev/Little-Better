@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export default defineSchema({
   tasks: defineTable({
+    completedAt: v.optional(v.number()),
     location: v.optional(v.string()),
     meetingLink: v.optional(v.string()),
     note: v.optional(v.string()),
@@ -11,6 +12,7 @@ export default defineSchema({
     scheduledAt: v.optional(v.number()),
   })
     .index("by_status", ["status"])
+    .index("by_status_and_completedAt", ["status", "completedAt"])
     .index("by_status_and_scheduledAt", ["status", "scheduledAt"]),
   focusCategories: defineTable({
     name: v.string(),
@@ -28,7 +30,9 @@ export default defineSchema({
     completedAt: v.number(),
     durationMinutes: v.number(),
     source: v.union(v.literal("timer"), v.literal("manual")),
-  }).index("by_category", ["categoryId"]),
+  })
+    .index("by_category", ["categoryId"])
+    .index("by_category_and_completedAt", ["categoryId", "completedAt"]),
   transactions: defineTable({
     accountId: v.optional(v.id("accounts")),
     amount: v.number(),
@@ -59,7 +63,7 @@ export default defineSchema({
     note: v.optional(v.string()),
     reflectedAt: v.number(),
     tags: v.array(v.string()),
-  }),
+  }).index("by_reflectedAt", ["reflectedAt"]),
   activeTimers: defineTable({
     categoryId: v.id("focusCategories"),
     elapsedSeconds: v.number(),
@@ -82,5 +86,7 @@ export default defineSchema({
       v.literal("dismissed"),
     ),
     suggestedAction: v.string(),
-  }).index("by_status", ["status"]),
+  })
+    .index("by_status", ["status"])
+    .index("by_status_and_createdAt", ["status", "createdAt"]),
 });
