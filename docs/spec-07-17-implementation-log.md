@@ -9,3 +9,5 @@
 - Added Today budget-overage alert data for spec 08 because it shares the Today payload.
 - Added task completion undo mutation and rendered Undo on Today.
 - Added task Details and Reschedule actions on ranked Today task cards.
+- Reworked Money so budget remaining is the first card, over-budget state is coral with the overage stated, pending confirmations sit above confirmed history, creation is no longer on the Money tab, and summaries are collapsed into a deeper view.
+- Hid category management inside Money's edit dropdown while preserving it in Quick Add.
