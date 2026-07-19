@@ -1,60 +1,34 @@
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useMemo } from "react";
-import { Text, View } from "react-native";
+import { PropsWithChildren, useMemo } from "react";
 
-import { colors, spacing } from "../src/theme";
+import { colors } from "../src/theme";
 
-function MissingConvexUrl() {
-  return (
-    <View
-      style={{
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: colors.background,
-        padding: spacing.xl,
-      }}
-    >
-      <Text style={{ color: colors.text, fontSize: 18, fontWeight: "700" }}>
-        Little Better
-      </Text>
-      <Text
-        style={{
-          color: colors.muted,
-          fontSize: 14,
-          lineHeight: 20,
-          marginTop: spacing.sm,
-          textAlign: "center",
-        }}
-      >
-        Add EXPO_PUBLIC_CONVEX_URL to apps/mobile/.env to connect Convex.
-      </Text>
-    </View>
-  );
-}
-
-export default function RootLayout() {
+function OptionalConvexProvider({ children }: PropsWithChildren) {
   const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
   const convex = useMemo(
     () => (convexUrl ? new ConvexReactClient(convexUrl) : null),
     [convexUrl],
   );
 
-  if (!convex) {
-    return (
-      <>
-        <MissingConvexUrl />
-        <StatusBar style="dark" />
-      </>
-    );
-  }
+  return convex ? <ConvexProvider client={convex}>{children}</ConvexProvider> : children;
+}
 
+export default function RootLayout() {
   return (
-    <ConvexProvider client={convex}>
-      <Stack screenOptions={{ headerShown: false }} />
+    <OptionalConvexProvider>
+      <Stack
+        initialRouteName="onboarding"
+        screenOptions={{ contentStyle: { backgroundColor: colors.background }, headerShown: false }}
+      >
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="focus" options={{ presentation: "fullScreenModal" }} />
+        <Stack.Screen name="quick-add" options={{ presentation: "transparentModal" }} />
+        <Stack.Screen name="reflection" options={{ presentation: "modal" }} />
+      </Stack>
       <StatusBar style="dark" />
-    </ConvexProvider>
+    </OptionalConvexProvider>
   );
 }
