@@ -21,7 +21,7 @@ export function CategoryDropdown({
   const [managing, setManaging] = useState(false);
 
   return (
-    <View>
+    <View style={styles.container}>
       <Pressable accessibilityRole="button" onPress={() => setOpen((value) => !value)} style={styles.trigger}>
         <Ionicons color={colors.primaryDark} name="pricetag-outline" size={20} />
         <View style={styles.grow}>
@@ -69,6 +69,7 @@ export function CategoryDropdown({
 }
 
 const styles = StyleSheet.create({
+  container: { position: "relative", zIndex: 20 },
   trigger: {
     alignItems: "center",
     backgroundColor: colors.surface,
@@ -88,8 +89,18 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.card,
     borderWidth: 1,
-    marginTop: spacing.sm,
+    elevation: 8,
+    left: 0,
+    maxHeight: 360,
     overflow: "hidden",
+    position: "absolute",
+    right: 0,
+    shadowColor: colors.text,
+    shadowOffset: { height: 6, width: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    top: 60,
+    zIndex: 30,
   },
   option: {
     alignItems: "center",
