@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
+import { CategoryDropdown } from "../src/components/CategoryDropdown";
 import { DatePickerField } from "../src/components/DatePickerField";
 import { PrimaryButton, Surface } from "../src/components/ui";
 import { colors, radii, spacing } from "../src/theme";
@@ -138,24 +139,12 @@ export default function QuickAddModal() {
                   style={styles.input}
                   value={expense.merchant}
                 />
-                <TextInput
-                  accessibilityLabel="Expense category"
-                  onChangeText={(category) => setExpense((current) => ({ ...current, category }))}
-                  placeholder="Category"
-                  placeholderTextColor={colors.muted}
-                  style={styles.input}
-                  value={expense.category}
+                <CategoryDropdown
+                  categories={money?.categories.filter((item) => item.type === expense.type) ?? []}
+                  onDelete={(categoryId) => removeCategory({ categoryId: categoryId as Id<"transactionCategories"> })}
+                  onSelect={(category) => setExpense((current) => ({ ...current, category }))}
+                  selected={expense.category}
                 />
-                <View style={styles.chips}>
-                  {(money?.categories.filter((item) => item.type === expense.type) ?? []).map((category) => (
-                    <View key={category._id} style={styles.categoryChip}>
-                      <Chip label={category.name} selected={expense.category === category.name} onPress={() => setExpense((current) => ({ ...current, category: category.name }))} />
-                      <Pressable accessibilityLabel={`Delete ${category.name} category`} accessibilityRole="button" onPress={() => removeCategory({ categoryId: category._id })} style={styles.deleteCategory}>
-                        <Ionicons color={colors.coral} name="trash-outline" size={16} />
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
                 <DatePickerField label="Expense date" onChange={(date) => setExpense((current) => ({ ...current, date }))} value={expense.date} />
                 <TextInput
                   accessibilityLabel="Expense note"
@@ -287,8 +276,6 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   chipTextSelected: { color: colors.surface },
-  categoryChip: { flexDirection: "row" },
-  deleteCategory: { alignItems: "center", backgroundColor: colors.coralSurface, borderRadius: radii.pill, height: 44, justifyContent: "center", marginLeft: -10, width: 34 },
 });
 
 function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {

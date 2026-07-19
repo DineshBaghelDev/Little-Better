@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
+import { CategoryDropdown } from "../../src/components/CategoryDropdown";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
 import { SectionLabel, Surface } from "../../src/components/ui";
@@ -132,16 +133,12 @@ export default function MoneyScreen() {
         </View>
         <TextInput accessibilityLabel="Amount" keyboardType="decimal-pad" onChangeText={(amount) => setExpense((current) => ({ ...current, amount }))} placeholder="Amount" placeholderTextColor={colors.muted} style={styles.input} value={expense.amount} />
         <TextInput accessibilityLabel="Merchant or payer" onChangeText={(merchant) => setExpense((current) => ({ ...current, merchant }))} placeholder={expense.type === "income" ? "Payer (optional)" : "Merchant (optional)"} placeholderTextColor={colors.muted} style={styles.input} value={expense.merchant} />
-        <View style={styles.chips}>
-          {categories.map((category) => (
-            <View key={category._id} style={styles.categoryChip}>
-              <Chip label={category.name} selected={expense.category === category.name} onPress={() => setExpense((current) => ({ ...current, category: category.name }))} />
-              <Pressable accessibilityLabel={`Delete ${category.name} category`} accessibilityRole="button" onPress={() => removeCategory({ categoryId: category._id })} style={styles.deleteCategory}>
-                <Ionicons color={colors.coral} name="trash-outline" size={16} />
-              </Pressable>
-            </View>
-          ))}
-        </View>
+        <CategoryDropdown
+          categories={categories}
+          onDelete={(categoryId) => removeCategory({ categoryId: categoryId as Id<"transactionCategories"> })}
+          onSelect={(category) => setExpense((current) => ({ ...current, category }))}
+          selected={expense.category}
+        />
         <Pressable accessibilityRole="button" onPress={() => setShowCategoryForm((open) => !open)} style={styles.categoryToggle}>
           <Ionicons color={colors.primaryDark} name={showCategoryForm ? "remove" : "add"} size={20} />
           <Text style={styles.categoryToggleText}>{showCategoryForm ? "Close category form" : "Add category"}</Text>
@@ -284,8 +281,6 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   chipTextSelected: { color: colors.surface },
-  categoryChip: { flexDirection: "row" },
-  deleteCategory: { alignItems: "center", backgroundColor: colors.coralSurface, borderRadius: radii.pill, height: 44, justifyContent: "center", marginLeft: -10, width: 34 },
   categoryToggle: { alignItems: "center", flexDirection: "row", gap: spacing.sm, minHeight: 44 },
   categoryToggleText: { color: colors.primaryDark, fontSize: 14, fontWeight: "700" },
   inline: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
