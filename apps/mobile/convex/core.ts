@@ -24,6 +24,9 @@ const focusCategory = v.object({
 const task = v.object({
   _id: v.id("tasks"),
   _creationTime: v.number(),
+  location: v.optional(v.string()),
+  meetingLink: v.optional(v.string()),
+  note: v.optional(v.string()),
   scheduledAt: v.optional(v.number()),
   status: v.union(v.literal("planned"), v.literal("done")),
   title: v.string(),
@@ -34,6 +37,8 @@ const transaction = v.object({
   _creationTime: v.number(),
   amount: v.number(),
   category: v.string(),
+  merchant: v.optional(v.string()),
+  note: v.optional(v.string()),
   occurredAt: v.number(),
   status: v.union(v.literal("pending"), v.literal("confirmed"), v.literal("ignored")),
 });
@@ -175,20 +180,44 @@ export const completeTask = mutation({
 });
 
 export const addTask = mutation({
-  args: { scheduledAt: v.optional(v.number()), title: v.string() },
+  args: {
+    location: v.optional(v.string()),
+    meetingLink: v.optional(v.string()),
+    note: v.optional(v.string()),
+    scheduledAt: v.optional(v.number()),
+    title: v.string(),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const title = args.title.trim();
-    if (title) await ctx.db.insert("tasks", { scheduledAt: args.scheduledAt, title, status: "planned" });
+    if (title) await ctx.db.insert("tasks", {
+      location: args.location?.trim() || undefined,
+      meetingLink: args.meetingLink?.trim() || undefined,
+      note: args.note?.trim() || undefined,
+      scheduledAt: args.scheduledAt,
+      title,
+      status: "planned",
+    });
     return null;
   },
 });
 
 export const scheduleTask = mutation({
-  args: { scheduledAt: v.optional(v.number()), taskId: v.id("tasks") },
+  args: {
+    location: v.optional(v.string()),
+    meetingLink: v.optional(v.string()),
+    note: v.optional(v.string()),
+    scheduledAt: v.optional(v.number()),
+    taskId: v.id("tasks"),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.taskId, { scheduledAt: args.scheduledAt });
+    await ctx.db.patch(args.taskId, {
+      location: args.location?.trim() || undefined,
+      meetingLink: args.meetingLink?.trim() || undefined,
+      note: args.note?.trim() || undefined,
+      scheduledAt: args.scheduledAt,
+    });
     return null;
   },
 });
@@ -296,14 +325,22 @@ export const addManualFocus = mutation({
 });
 
 export const addExpense = mutation({
-  args: { amount: v.number(), category: v.string() },
+  args: {
+    amount: v.number(),
+    category: v.string(),
+    merchant: v.optional(v.string()),
+    note: v.optional(v.string()),
+    occurredAt: v.optional(v.number()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     if (!Number.isFinite(args.amount) || args.amount <= 0) return null;
     await ctx.db.insert("transactions", {
       amount: Math.round(args.amount),
       category: args.category.trim() || "General",
-      occurredAt: Date.now(),
+      merchant: args.merchant?.trim() || undefined,
+      note: args.note?.trim() || undefined,
+      occurredAt: args.occurredAt ?? Date.now(),
       status: "pending",
     });
     return null;
@@ -397,14 +434,27 @@ export const updateTransaction = mutation({
   args: {
     amount: v.optional(v.number()),
     category: v.optional(v.string()),
+    merchant: v.optional(v.string()),
+    note: v.optional(v.string()),
+    occurredAt: v.optional(v.number()),
     status: v.optional(v.union(v.literal("pending"), v.literal("confirmed"), v.literal("ignored"))),
     transactionId: v.id("transactions"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const patch: Partial<{ amount: number; category: string; status: "pending" | "confirmed" | "ignored" }> = {};
+    const patch: Partial<{
+      amount: number;
+      category: string;
+      merchant: string;
+      note: string;
+      occurredAt: number;
+      status: "pending" | "confirmed" | "ignored";
+    }> = {};
     if (args.amount !== undefined && Number.isFinite(args.amount) && args.amount > 0) patch.amount = Math.round(args.amount);
     if (args.category !== undefined && args.category.trim()) patch.category = args.category.trim();
+    if (args.merchant !== undefined) patch.merchant = args.merchant.trim();
+    if (args.note !== undefined) patch.note = args.note.trim();
+    if (args.occurredAt !== undefined && Number.isFinite(args.occurredAt)) patch.occurredAt = args.occurredAt;
     if (args.status !== undefined) patch.status = args.status;
     if (Object.keys(patch).length) await ctx.db.patch(args.transactionId, patch);
     return null;

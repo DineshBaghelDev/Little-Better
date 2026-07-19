@@ -97,6 +97,9 @@ export default function TodayTabScreen() {
                     })
                   : "Unscheduled"}
               </Text>
+              {task.location ? <Text style={styles.meta}>{task.location}</Text> : null}
+              {task.meetingLink ? <Text style={styles.meta}>{task.meetingLink}</Text> : null}
+              {task.note ? <Text style={styles.meta}>{task.note}</Text> : null}
             </View>
             <Pressable
               accessibilityLabel="Complete task"
@@ -157,8 +160,8 @@ export default function TodayTabScreen() {
           {laterOpen ? (
             <View style={styles.laterDetails}>
               {laterTasks.map((task) => (
-                <Text key={task._id} style={styles.laterTask}>
-                  {task.title}
+            <Text key={task._id} style={styles.laterTask}>
+                  {task.title}{task.location ? ` · ${task.location}` : ""}
                 </Text>
               ))}
             </View>
