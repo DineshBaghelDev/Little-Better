@@ -586,3 +586,12 @@ export const addCategory = mutation({
     return null;
   },
 });
+
+export const removeCategory = mutation({
+  args: { categoryId: v.id("transactionCategories") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.categoryId);
+    return null;
+  },
+});

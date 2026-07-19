@@ -31,6 +31,7 @@ export default function MoneyScreen() {
   const ensureMoneyDefaults = useMutation(api.core.ensureMoneyDefaults);
   const addExpense = useMutation(api.core.addExpense);
   const addCategory = useMutation(api.core.addCategory);
+  const removeCategory = useMutation(api.core.removeCategory);
   const addAccount = useMutation(api.core.addAccount);
   const updateAccount = useMutation(api.core.updateAccount);
   const archiveAccount = useMutation(api.core.archiveAccount);
@@ -38,6 +39,8 @@ export default function MoneyScreen() {
   const [selectedAccount, setSelectedAccount] = useState<Id<"accounts"> | undefined>();
   const money = useQuery(api.core.money, selectedAccount ? { accountId: selectedAccount } : {});
   const [newCategory, setNewCategory] = useState("");
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [showAccountForm, setShowAccountForm] = useState(false);
   const [accountForm, setAccountForm] = useState({ balance: "", name: "" });
   const [editingAccount, setEditingAccount] = useState<Id<"accounts"> | null>(null);
   const [expense, setExpense] = useState({
@@ -61,11 +64,14 @@ export default function MoneyScreen() {
   }, [ensureMoneyDefaults]);
 
   async function saveTransaction() {
-    if (!expense.amount.trim()) return;
+    const amount = Number(expense.amount);
+    const accountId = selectedAccount ?? money?.accounts[0]?._id;
+    const category = expense.category || categories[0]?.name || "General";
+    if (!Number.isFinite(amount) || amount <= 0 || !accountId) return;
     await addExpense({
-      accountId: selectedAccount ?? money?.accounts[0]?._id,
-      amount: Number(expense.amount),
-      category: expense.category || categories[0]?.name || "General",
+      accountId,
+      amount,
+      category,
       merchant: expense.merchant,
       note: expense.note,
       occurredAt: parseDate(expense.date),
@@ -82,6 +88,7 @@ export default function MoneyScreen() {
     await addCategory({ name, type: expense.type });
     setExpense((current) => ({ ...current, category: name }));
     setNewCategory("");
+    setShowCategoryForm(false);
   }
 
   async function saveAccount() {
@@ -92,6 +99,7 @@ export default function MoneyScreen() {
     else await addAccount({ balance, name });
     setAccountForm({ balance: "", name: "" });
     setEditingAccount(null);
+    setShowAccountForm(false);
   }
 
   return (
@@ -131,15 +139,23 @@ export default function MoneyScreen() {
         <TextInput accessibilityLabel="Merchant or payer" onChangeText={(merchant) => setExpense((current) => ({ ...current, merchant }))} placeholder={expense.type === "income" ? "Payer (optional)" : "Merchant (optional)"} placeholderTextColor={colors.muted} style={styles.input} value={expense.merchant} />
         <View style={styles.chips}>
           {categories.map((category) => (
-            <Chip key={category._id} label={category.name} selected={expense.category === category.name} onPress={() => setExpense((current) => ({ ...current, category: category.name }))} />
+            <View key={category._id} style={styles.categoryChip}>
+              <Chip label={category.name} selected={expense.category === category.name} onPress={() => setExpense((current) => ({ ...current, category: category.name }))} />
+              <Pressable accessibilityLabel={`Delete ${category.name} category`} accessibilityRole="button" onPress={() => removeCategory({ categoryId: category._id })} style={styles.deleteCategory}>
+                <Ionicons color={colors.coral} name="close" size={16} />
+              </Pressable>
+            </View>
           ))}
+          <Chip label={showCategoryForm ? "Close category" : "Add category"} selected={showCategoryForm} onPress={() => setShowCategoryForm((open) => !open)} />
         </View>
-        <View style={styles.inline}>
-          <TextInput accessibilityLabel="New category" onChangeText={setNewCategory} placeholder="Add category" placeholderTextColor={colors.muted} style={[styles.input, styles.grow]} value={newCategory} />
-          <Pressable accessibilityLabel="Add category" accessibilityRole="button" onPress={saveCategory} style={styles.iconButton}>
-            <Ionicons color={colors.primaryDark} name="add" size={22} />
-          </Pressable>
-        </View>
+        {showCategoryForm ? (
+          <View style={styles.inline}>
+            <TextInput accessibilityLabel="New category" onChangeText={setNewCategory} placeholder="New category" placeholderTextColor={colors.muted} style={[styles.input, styles.grow]} value={newCategory} />
+            <Pressable accessibilityLabel="Save category" accessibilityRole="button" onPress={saveCategory} style={styles.iconButton}>
+              <Ionicons color={colors.primaryDark} name="checkmark" size={22} />
+            </Pressable>
+          </View>
+        ) : null}
         <View style={styles.inline}>
           <Pressable accessibilityRole="button" onPress={() => setExpense((current) => ({ ...current, date: dateInput(parseDate(current.date) - DAY_MS) }))} style={styles.iconButton}><Ionicons color={colors.primaryDark} name="chevron-back" size={20} /></Pressable>
           <TextInput accessibilityLabel="Transaction date" onChangeText={(date) => setExpense((current) => ({ ...current, date }))} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} style={[styles.input, styles.grow]} value={expense.date} />
@@ -163,6 +179,7 @@ export default function MoneyScreen() {
             <Pressable accessibilityRole="button" onPress={() => {
               setEditingAccount(account._id);
               setAccountForm({ balance: String(account.balance), name: account.name });
+              setShowAccountForm(true);
             }} style={styles.iconButton}>
               <Ionicons color={colors.primaryDark} name="create-outline" size={20} />
             </Pressable>
@@ -171,13 +188,23 @@ export default function MoneyScreen() {
             </Pressable>
           </View>
         ))}
-        <View style={styles.form}>
-          <TextInput accessibilityLabel="Account name" onChangeText={(name) => setAccountForm((current) => ({ ...current, name }))} placeholder="Account name" placeholderTextColor={colors.muted} style={styles.input} value={accountForm.name} />
-          <TextInput accessibilityLabel="Starting balance" keyboardType="decimal-pad" onChangeText={(balance) => setAccountForm((current) => ({ ...current, balance }))} placeholder="Starting balance" placeholderTextColor={colors.muted} style={styles.input} value={accountForm.balance} />
-          <Pressable accessibilityRole="button" onPress={saveAccount} style={styles.addButton}>
-            <Text style={styles.addButtonText}>{editingAccount ? "Save account" : "Add account"}</Text>
-          </Pressable>
-        </View>
+        <Pressable accessibilityRole="button" onPress={() => {
+          setShowAccountForm((open) => !open);
+          setEditingAccount(null);
+          setAccountForm({ balance: "", name: "" });
+        }} style={styles.accountToggle}>
+          <Ionicons color={colors.primaryDark} name={showAccountForm ? "remove" : "add"} size={21} />
+          <Text style={styles.accountToggleText}>{showAccountForm ? "Close account form" : "Add wallet"}</Text>
+        </Pressable>
+        {showAccountForm ? (
+          <View style={styles.form}>
+            <TextInput accessibilityLabel="Account name" onChangeText={(name) => setAccountForm((current) => ({ ...current, name }))} placeholder="Account name" placeholderTextColor={colors.muted} style={styles.input} value={accountForm.name} />
+            <TextInput accessibilityLabel="Starting balance" keyboardType="decimal-pad" onChangeText={(balance) => setAccountForm((current) => ({ ...current, balance }))} placeholder="Starting balance" placeholderTextColor={colors.muted} style={styles.input} value={accountForm.balance} />
+            <Pressable accessibilityRole="button" onPress={saveAccount} style={styles.addButton}>
+              <Text style={styles.addButtonText}>{editingAccount ? "Save account" : "Add account"}</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </Surface>
 
       {money?.pending.length ? (
@@ -264,6 +291,8 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   chipTextSelected: { color: colors.surface },
+  categoryChip: { flexDirection: "row" },
+  deleteCategory: { alignItems: "center", height: 44, justifyContent: "center", marginLeft: -10, width: 28 },
   inline: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   grow: { flex: 1 },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 14, minHeight: 44, paddingHorizontal: spacing.sm },
@@ -273,6 +302,8 @@ const styles = StyleSheet.create({
   todayButton: { alignItems: "center", backgroundColor: colors.sageSurface, borderRadius: radii.control, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
   todayText: { color: colors.primaryDark, fontSize: 13, fontWeight: "700" },
   accountRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 72, paddingHorizontal: spacing.md },
+  accountToggle: { alignItems: "center", flexDirection: "row", gap: spacing.sm, minHeight: 56, paddingHorizontal: spacing.md },
+  accountToggleText: { color: colors.primaryDark, fontSize: 14, fontWeight: "700" },
   pending: { alignItems: "center", backgroundColor: colors.coralSurface, borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 72, paddingHorizontal: spacing.md },
   transaction: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 72, paddingHorizontal: spacing.md },
   transactionIcon: { alignItems: "center", backgroundColor: colors.sageSurface, borderRadius: radii.pill, height: 40, justifyContent: "center", width: 40 },

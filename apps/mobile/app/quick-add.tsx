@@ -22,6 +22,7 @@ export default function QuickAddModal() {
   const ensureMoneyDefaults = useMutation(api.core.ensureMoneyDefaults);
   const addTask = useMutation(api.core.addTask);
   const addExpense = useMutation(api.core.addExpense);
+  const removeCategory = useMutation(api.core.removeCategory);
   const addManualFocus = useMutation(api.core.addManualFocus);
   const startFocus = useMutation(api.core.startFocus);
   const money = useQuery(api.core.money, {});
@@ -57,10 +58,12 @@ export default function QuickAddModal() {
       return;
     }
     if (selected === "Expense") {
-      if (!expense.amount.trim()) return;
+      const amount = Number(expense.amount);
+      const accountId = expense.accountId ?? money?.accounts[0]?._id;
+      if (!Number.isFinite(amount) || amount <= 0 || !accountId) return;
       await addExpense({
-        accountId: expense.accountId ?? money?.accounts[0]?._id,
-        amount: Number(expense.amount),
+        accountId,
+        amount,
         category: expense.category || "General",
         merchant: expense.merchant,
         note: expense.note,
@@ -142,7 +145,12 @@ export default function QuickAddModal() {
                 />
                 <View style={styles.chips}>
                   {(money?.categories.filter((item) => item.type === expense.type) ?? []).map((category) => (
-                    <Chip key={category._id} label={category.name} selected={expense.category === category.name} onPress={() => setExpense((current) => ({ ...current, category: category.name }))} />
+                    <View key={category._id} style={styles.categoryChip}>
+                      <Chip label={category.name} selected={expense.category === category.name} onPress={() => setExpense((current) => ({ ...current, category: category.name }))} />
+                      <Pressable accessibilityLabel={`Delete ${category.name} category`} accessibilityRole="button" onPress={() => removeCategory({ categoryId: category._id })} style={styles.deleteCategory}>
+                        <Ionicons color={colors.coral} name="close" size={16} />
+                      </Pressable>
+                    </View>
                   ))}
                 </View>
                 <TextInput
@@ -260,6 +268,8 @@ const styles = StyleSheet.create({
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   chipTextSelected: { color: colors.surface },
+  categoryChip: { flexDirection: "row" },
+  deleteCategory: { alignItems: "center", height: 44, justifyContent: "center", marginLeft: -10, width: 28 },
 });
 
 function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
