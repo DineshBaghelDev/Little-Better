@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import { Doc, Id } from "../../convex/_generated/dataModel";
 import { CategoryDropdown } from "../../src/components/CategoryDropdown";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
@@ -19,8 +19,8 @@ function moneyText(value: number) {
 }
 
 function parseDate(value: string) {
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? Date.now() : parsed.getTime();
+  const [year, month, day] = value.split("-").map(Number);
+  return year && month && day ? new Date(year, month - 1, day).getTime() : Date.now();
 }
 
 export default function MoneyScreen() {
@@ -32,7 +32,9 @@ export default function MoneyScreen() {
   const updateAccount = useMutation(api.core.updateAccount);
   const archiveAccount = useMutation(api.core.archiveAccount);
   const updateTransaction = useMutation(api.core.updateTransaction);
+  const removeTransaction = useMutation(api.core.removeTransaction);
   const [selectedAccount, setSelectedAccount] = useState<Id<"accounts"> | undefined>();
+  const [editingTransaction, setEditingTransaction] = useState<Id<"transactions"> | null>(null);
   const money = useQuery(api.core.money, selectedAccount ? { accountId: selectedAccount } : {});
   const [newCategory, setNewCategory] = useState("");
   const [showCategoryForm, setShowCategoryForm] = useState(false);
@@ -46,6 +48,7 @@ export default function MoneyScreen() {
     merchant: "",
     note: "",
     paymentMethod: "online" as PaymentMethod,
+    status: "confirmed" as "pending" | "confirmed",
     type: "expense" as TransactionType,
   });
   const categories = money?.categories.filter((item) => item.type === expense.type) ?? [];
@@ -64,7 +67,7 @@ export default function MoneyScreen() {
     const accountId = selectedAccount ?? money?.accounts[0]?._id;
     const category = expense.category || categories[0]?.name || "General";
     if (!Number.isFinite(amount) || amount <= 0 || !accountId) return;
-    await addExpense({
+    const payload = {
       accountId,
       amount,
       category,
@@ -72,10 +75,28 @@ export default function MoneyScreen() {
       note: expense.note,
       occurredAt: parseDate(expense.date),
       paymentMethod: expense.paymentMethod,
-      status: "confirmed",
+      status: expense.status,
       type: expense.type,
+    };
+    if (editingTransaction) await updateTransaction({ ...payload, transactionId: editingTransaction });
+    else await addExpense(payload);
+    setEditingTransaction(null);
+    setExpense((current) => ({ ...current, amount: "", merchant: "", note: "", status: "confirmed" }));
+  }
+
+  function editTransaction(transaction: Doc<"transactions">) {
+    setEditingTransaction(transaction._id);
+    setSelectedAccount(transaction.accountId);
+    setExpense({
+      amount: String(transaction.amount),
+      category: transaction.category,
+      date: dateInput(transaction.occurredAt),
+      merchant: transaction.merchant ?? "",
+      note: transaction.note ?? "",
+      paymentMethod: transaction.paymentMethod ?? "online",
+      status: transaction.status === "pending" ? "pending" : "confirmed",
+      type: transaction.type ?? "expense",
     });
-    setExpense((current) => ({ ...current, amount: "", merchant: "", note: "" }));
   }
 
   async function saveCategory() {
@@ -123,8 +144,8 @@ export default function MoneyScreen() {
         ))}
       </View>
 
-      <SectionLabel>Add transaction</SectionLabel>
-      <Surface style={styles.form}>
+      <SectionLabel>{editingTransaction ? "Edit transaction" : "Add transaction"}</SectionLabel>
+      <Surface style={[styles.form, styles.transactionForm]}>
         <View style={styles.chips}>
           <Chip label="Expense" selected={expense.type === "expense"} onPress={() => setExpense((current) => ({ ...current, category: "Food", type: "expense" }))} />
           <Chip label="Income" selected={expense.type === "income"} onPress={() => setExpense((current) => ({ ...current, category: "Salary", type: "income" }))} />
@@ -154,8 +175,17 @@ export default function MoneyScreen() {
         <DatePickerField label="Transaction date" onChange={(date) => setExpense((current) => ({ ...current, date }))} value={expense.date} />
         <TextInput accessibilityLabel="Transaction note" onChangeText={(note) => setExpense((current) => ({ ...current, note }))} placeholder="Note (optional)" placeholderTextColor={colors.muted} style={styles.input} value={expense.note} />
         <Pressable accessibilityRole="button" onPress={saveTransaction} style={styles.addButton}>
-          <Text style={styles.addButtonText}>Save transaction</Text>
+          <Text style={styles.addButtonText}>{editingTransaction ? "Save changes" : "Save transaction"}</Text>
         </Pressable>
+        {editingTransaction ? (
+          <Pressable accessibilityRole="button" onPress={() => {
+            setEditingTransaction(null);
+            setExpense((current) => ({ ...current, amount: "", merchant: "", note: "", status: "confirmed" }));
+          }} style={styles.categoryToggle}>
+            <Ionicons color={colors.primaryDark} name="close" size={20} />
+            <Text style={styles.categoryToggleText}>Cancel edit</Text>
+          </Pressable>
+        ) : null}
       </Surface>
 
       <SectionLabel>Accounts</SectionLabel>
@@ -209,11 +239,17 @@ export default function MoneyScreen() {
                   {transaction.note ? <Text style={styles.meta}>{transaction.note}</Text> : null}
                 </View>
                 <Text style={styles.transactionTitle}>{moneyText(transaction.amount)}</Text>
+                <Pressable accessibilityLabel={`Edit ${transaction.category} transaction`} accessibilityRole="button" onPress={() => editTransaction(transaction)} style={styles.iconButton}>
+                  <Ionicons color={colors.primaryDark} name="create-outline" size={20} />
+                </Pressable>
                 <Pressable accessibilityLabel={`Confirm ${transaction.category} transaction`} accessibilityRole="button" onPress={() => updateTransaction({ status: "confirmed", transactionId: transaction._id })} style={styles.confirm}>
                   <Ionicons color={colors.surface} name="checkmark" size={20} />
                 </Pressable>
                 <Pressable accessibilityLabel={`Ignore ${transaction.category} transaction`} accessibilityRole="button" onPress={() => updateTransaction({ status: "ignored", transactionId: transaction._id })} style={styles.iconButton}>
                   <Ionicons color={colors.coral} name="close" size={20} />
+                </Pressable>
+                <Pressable accessibilityLabel={`Delete ${transaction.category} transaction`} accessibilityRole="button" onPress={() => removeTransaction({ transactionId: transaction._id })} style={styles.iconButton}>
+                  <Ionicons color={colors.coral} name="trash-outline" size={20} />
                 </Pressable>
               </View>
             ))}
@@ -234,6 +270,12 @@ export default function MoneyScreen() {
               {transaction.note ? <Text style={styles.meta}>{transaction.note}</Text> : null}
             </View>
             <Text style={styles.transactionTitle}>{(transaction.type ?? "expense") === "income" ? "+" : "-"}{moneyText(transaction.amount)}</Text>
+            <Pressable accessibilityLabel={`Edit ${transaction.category} transaction`} accessibilityRole="button" onPress={() => editTransaction(transaction)} style={styles.iconButton}>
+              <Ionicons color={colors.primaryDark} name="create-outline" size={20} />
+            </Pressable>
+            <Pressable accessibilityLabel={`Delete ${transaction.category} transaction`} accessibilityRole="button" onPress={() => removeTransaction({ transactionId: transaction._id })} style={styles.iconButton}>
+              <Ionicons color={colors.coral} name="trash-outline" size={20} />
+            </Pressable>
           </View>
         ))}
         {money?.confirmed.length === 0 ? <Text style={styles.emptyText}>No confirmed transactions yet.</Text> : null}
@@ -276,6 +318,7 @@ const styles = StyleSheet.create({
   progress: { backgroundColor: colors.primary, height: "100%" },
   used: { color: colors.primaryDark, fontSize: 13, fontWeight: "600", marginTop: spacing.sm },
   form: { gap: spacing.sm, padding: spacing.md },
+  transactionForm: { overflow: "visible", zIndex: 10 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
