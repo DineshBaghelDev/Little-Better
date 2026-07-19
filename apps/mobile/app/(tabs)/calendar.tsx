@@ -23,17 +23,29 @@ function parseDate(value: string) {
   return year && month && day ? new Date(year, month - 1, day).getTime() : Date.now();
 }
 
+function weekStartFor(value: number) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return date.getTime();
+}
+
 export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState(dateInput(Date.now()));
   const [dateModalOpen, setDateModalOpen] = useState(false);
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [schedulingTask, setSchedulingTask] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
   const dayStart = useMemo(() => parseDate(selectedDate), [selectedDate]);
   const selectedDay = useMemo(() => new Date(dayStart), [dayStart]);
-  const days = useMemo(() => Array.from({ length: 7 }, (_, index) => new Date(dayStart + index * DAY_MS)), [dayStart]);
+  const weekStart = useMemo(() => weekStartFor(dayStart), [dayStart]);
+  const days = useMemo(() => Array.from({ length: 7 }, (_, index) => new Date(weekStart + index * DAY_MS)), [weekStart]);
   const calendar = useQuery(api.core.calendar, {
     from: dayStart,
     to: dayStart + DAY_MS - 1,
   });
   const addTask = useMutation(api.core.addTask);
+  const completeTask = useMutation(api.core.completeTask);
   const scheduleTask = useMutation(api.core.scheduleTask);
   const [taskForm, setTaskForm] = useState({
     location: "",
@@ -57,6 +69,11 @@ export default function CalendarScreen() {
       title: trimmed,
     });
     setTaskForm({ location: "", meetingLink: "", note: "", time: taskForm.time, title: "" });
+    setShowCreate(false);
+  }
+
+  function moveWeek(offset: number) {
+    setSelectedDate(dateInput(dayStart + offset * 7 * DAY_MS));
   }
 
   return (
@@ -69,31 +86,40 @@ export default function CalendarScreen() {
       subtitle="Selected day"
       title="Calendar"
     >
-      <View style={styles.week}>
-        {days.map((day) => {
-          const value = dateInput(day.getTime());
-          const selected = selectedDate === value;
-          return (
-            <Pressable
-              accessibilityLabel={day.toDateString()}
-              accessibilityRole="button"
-              key={value}
-              onPress={() => setSelectedDate(value)}
-              style={[styles.day, selected && styles.daySelected]}
-            >
-              <Text style={[styles.dayName, selected && styles.dayTextSelected]}>
-                {day.toLocaleDateString([], { weekday: "short" }).slice(0, 1)}
-              </Text>
-              <Text style={[styles.date, selected && styles.dayTextSelected]}>{day.getDate()}</Text>
-            </Pressable>
-          );
-        })}
+      <View style={styles.weekNav}>
+        <Pressable accessibilityLabel="Previous week" accessibilityRole="button" onPress={() => moveWeek(-1)} style={styles.headerIcon}>
+          <Ionicons color={colors.text} name="chevron-back" size={22} />
+        </Pressable>
+        <View style={styles.week}>
+          {days.map((day) => {
+            const value = dateInput(day.getTime());
+            const selected = selectedDate === value;
+            return (
+              <Pressable
+                accessibilityLabel={day.toDateString()}
+                accessibilityRole="button"
+                key={value}
+                onPress={() => setSelectedDate(value)}
+                style={[styles.day, selected && styles.daySelected]}
+              >
+                <Text style={[styles.dayName, selected && styles.dayTextSelected]}>
+                  {day.toLocaleDateString([], { weekday: "short" }).slice(0, 1)}
+                </Text>
+                <Text style={[styles.date, selected && styles.dayTextSelected]}>{day.getDate()}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable accessibilityLabel="Next week" accessibilityRole="button" onPress={() => moveWeek(1)} style={styles.headerIcon}>
+          <Ionicons color={colors.text} name="chevron-forward" size={22} />
+        </Pressable>
       </View>
 
       <SectionLabel>{selectedDay.toLocaleDateString([], { day: "numeric", month: "long", weekday: "long" })}</SectionLabel>
       <View style={styles.events}>
         {scheduled.map((task) => (
-          <Surface key={task._id} style={styles.event}>
+          <Surface key={task._id}>
+          <Pressable accessibilityRole="button" onPress={() => setExpandedTask(expandedTask === task._id ? null : task._id)} style={styles.event}>
             <View style={[styles.eventRail, { backgroundColor: colors.primary }]} />
             <View style={styles.eventCopy}>
               <Text style={styles.eventTitle}>{task.title}</Text>
@@ -102,6 +128,16 @@ export default function CalendarScreen() {
               {task.meetingLink ? <Text style={styles.eventTime}>{task.meetingLink}</Text> : null}
               {task.note ? <Text style={styles.eventTime}>{task.note}</Text> : null}
             </View>
+          </Pressable>
+          {expandedTask === task._id ? (
+            <View style={styles.taskActions}>
+              <ClockTimePicker value={taskForm.time} onChange={(time) => setTaskForm((current) => ({ ...current, time }))} />
+              <View style={styles.actionRow}>
+                <View style={styles.grow}><PrimaryButton label="Complete" onPress={() => completeTask({ taskId: task._id })} /></View>
+                <View style={styles.grow}><PrimaryButton label="Move" onPress={() => scheduleTask({ scheduledAt: timeOnDay(dayStart, taskForm.time), taskId: task._id })} secondary /></View>
+              </View>
+            </View>
+          ) : null}
           </Surface>
         ))}
         {sessions.map((session) => (
@@ -109,7 +145,9 @@ export default function CalendarScreen() {
             <View style={[styles.eventRail, { backgroundColor: colors.lavender }]} />
             <View style={styles.eventCopy}>
               <Text style={styles.eventTitle}>Focus session</Text>
-              <Text style={styles.eventTime}>{session.durationMinutes} minutes logged</Text>
+              <Text style={styles.eventTime}>
+                {new Date(session.completedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} - {session.durationMinutes} minutes logged
+              </Text>
             </View>
           </Surface>
         ))}
@@ -121,6 +159,12 @@ export default function CalendarScreen() {
         ) : null}
       </View>
 
+      <Pressable accessibilityRole="button" onPress={() => setShowCreate((open) => !open)} style={styles.createToggle}>
+        <Ionicons color={colors.primaryDark} name={showCreate ? "remove" : "add"} size={21} />
+        <Text style={styles.createToggleText}>{showCreate ? "Close task form" : "Add task to this day"}</Text>
+      </Pressable>
+
+      {showCreate ? (
       <Surface style={styles.quickAdd}>
         <TextInput
           accessibilityLabel="New scheduled task"
@@ -158,23 +202,34 @@ export default function CalendarScreen() {
         />
         <PrimaryButton label="Add" onPress={addToDay} />
       </Surface>
+      ) : null}
 
       <SectionLabel>Unscheduled tasks</SectionLabel>
       <Surface>
         {(calendar?.unscheduledTasks ?? []).map((task) => (
-          <Pressable
-            accessibilityRole="button"
-            key={task._id}
-            onPress={() => scheduleTask({ scheduledAt: timeOnDay(dayStart, taskForm.time), taskId: task._id })}
-            style={styles.unscheduled}
-          >
-            <View style={styles.eventCopy}>
-              <Text style={styles.eventTitle}>{task.title}</Text>
-              <Text style={styles.eventTime}>Tap to schedule at {taskForm.time}</Text>
-              {task.note ? <Text style={styles.eventTime}>{task.note}</Text> : null}
-            </View>
-            <Ionicons color={colors.primaryDark} name="calendar-outline" size={21} />
-          </Pressable>
+          <View key={task._id}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setSchedulingTask(schedulingTask === task._id ? null : task._id)}
+              style={styles.unscheduled}
+            >
+              <View style={styles.eventCopy}>
+                <Text style={styles.eventTitle}>{task.title}</Text>
+                <Text style={styles.eventTime}>Choose a time to schedule</Text>
+                {task.note ? <Text style={styles.eventTime}>{task.note}</Text> : null}
+              </View>
+              <Ionicons color={colors.primaryDark} name="calendar-outline" size={21} />
+            </Pressable>
+            {schedulingTask === task._id ? (
+              <View style={styles.taskActions}>
+                <ClockTimePicker value={taskForm.time} onChange={(time) => setTaskForm((current) => ({ ...current, time }))} />
+                <PrimaryButton label="Schedule" onPress={() => {
+                  scheduleTask({ scheduledAt: timeOnDay(dayStart, taskForm.time), taskId: task._id });
+                  setSchedulingTask(null);
+                }} />
+              </View>
+            ) : null}
+          </View>
         ))}
         {calendar?.unscheduledTasks.length === 0 ? <Text style={styles.emptyText}>No unscheduled tasks.</Text> : null}
       </Surface>
@@ -260,6 +315,7 @@ function ClockTimePicker({ onChange, value }: { onChange: (value: string) => voi
 
 const styles = StyleSheet.create({
   headerIcon: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
+  weekNav: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   week: { flexDirection: "row", justifyContent: "space-between" },
   day: { alignItems: "center", borderRadius: 22, gap: 6, minHeight: 64, paddingHorizontal: 10, paddingVertical: 8 },
   daySelected: { backgroundColor: colors.primary },
@@ -273,6 +329,11 @@ const styles = StyleSheet.create({
   eventTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
   eventTime: { color: colors.muted, fontSize: 12, marginTop: spacing.xs },
   empty: { padding: spacing.md },
+  taskActions: { gap: spacing.sm, padding: spacing.md },
+  actionRow: { flexDirection: "row", gap: spacing.sm },
+  grow: { flex: 1 },
+  createToggle: { alignItems: "center", flexDirection: "row", gap: spacing.sm, minHeight: 44 },
+  createToggleText: { color: colors.primaryDark, fontSize: 14, fontWeight: "700" },
   quickAdd: { gap: spacing.sm, padding: spacing.md },
   input: { borderColor: colors.border, borderRadius: 14, borderWidth: 1, color: colors.text, fontSize: 15, minHeight: 48, paddingHorizontal: spacing.md },
   unscheduled: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 68 },
