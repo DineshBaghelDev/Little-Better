@@ -1,64 +1,166 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { api } from "../../convex/_generated/api";
+import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
 import { PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
 import { colors, radii, spacing } from "../../src/theme";
 
+type RangePreset = "day" | "week" | "month" | "year" | "custom";
+
+const DAY = 24 * 60 * 60 * 1000;
+
+function rangeFor(preset: RangePreset, customFrom: string, customTo: string) {
+  const now = new Date();
+  const start = new Date(now);
+  if (preset === "day") start.setHours(0, 0, 0, 0);
+  if (preset === "week") start.setTime(now.getTime() - 6 * DAY);
+  if (preset === "month") start.setFullYear(now.getFullYear(), now.getMonth(), 1);
+  if (preset === "year") start.setFullYear(now.getFullYear(), 0, 1);
+  if (preset === "custom") {
+    const from = new Date(`${customFrom}T00:00:00`).getTime();
+    const to = new Date(`${customTo}T23:59:59`).getTime();
+    return { from: Number.isFinite(from) ? from : now.getTime(), to: Number.isFinite(to) ? to : now.getTime() };
+  }
+  return { from: start.getTime(), to: now.getTime() };
+}
+
+function moneyText(value: number) {
+  return `Rs ${value.toLocaleString("en-IN")}`;
+}
+
 export default function ProgressScreen() {
-  const [insight, setInsight] = useState<"available" | "applied" | "dismissed">("available");
+  const [preset, setPreset] = useState<RangePreset>("week");
+  const [customFrom, setCustomFrom] = useState(dateInput(Date.now() - 6 * DAY));
+  const [customTo, setCustomTo] = useState(dateInput(Date.now()));
+  const [computedInsight, setComputedInsight] = useState<"new" | "applied" | "dismissed">("new");
+  const range = useMemo(() => rangeFor(preset, customFrom, customTo), [customFrom, customTo, preset]);
+  const insights = useQuery(api.core.insights, range);
+  const setWeeklyInsightStatus = useMutation(api.core.setWeeklyInsightStatus);
+  const currentInsight = insights?.currentInsight;
+  const currentInsightStatus = currentInsight?._id ? currentInsight.status : computedInsight;
+  const maxCategory = Math.max(1, ...(insights?.categorySummary.map((item) => item.amount) ?? [1]));
+
+  async function setInsightStatus(status: "new" | "applied" | "dismissed") {
+    if (currentInsight?._id) await setWeeklyInsightStatus({ insightId: currentInsight._id, status });
+    else setComputedInsight(status);
+  }
 
   return (
-    <Screen subtitle="Your week at a glance" title="Progress">
-      <View style={styles.stats}>
-        <Stat color={colors.sageSurface} label="Focus" value="6" detail="sessions" />
-        <Stat color={colors.lavenderSurface} label="Tasks" value="14" detail="completed" />
-        <Stat color={colors.mustardSurface} label="Spent" value="₹7.5k" detail="of ₹25k" />
+    <Screen subtitle="History and one weekly improvement" title="Progress">
+      <View style={styles.chips}>
+        {(["day", "week", "month", "year", "custom"] as const).map((item) => (
+          <Chip
+            key={item}
+            label={item === "day" ? "Daily" : item === "custom" ? "Custom" : `${item[0].toUpperCase()}${item.slice(1)}ly`}
+            selected={preset === item}
+            onPress={() => setPreset(item)}
+          />
+        ))}
       </View>
 
-      {insight === "available" ? (
+      {preset === "custom" ? (
+        <View style={styles.dateRow}>
+          <View style={styles.grow}>
+            <DatePickerField label="From" onChange={setCustomFrom} value={customFrom} />
+          </View>
+          <View style={styles.grow}>
+            <DatePickerField label="To" onChange={setCustomTo} value={customTo} />
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.stats}>
+        <Stat color={colors.sageSurface} label={insights?.focusCategoryName ?? "Focus"} value={`${insights?.focusSessions ?? 0}`} detail={`${insights?.focusMinutes ?? 0} minutes`} />
+        <Stat color={colors.lavenderSurface} label="Tasks" value={`${insights?.completedTasks ?? 0}`} detail="completed" />
+        <Stat color={colors.mustardSurface} label="Spent" value={moneyText(insights?.spent ?? 0)} detail="confirmed" />
+      </View>
+
+      {currentInsight && currentInsightStatus === "new" ? (
         <View style={styles.insight}>
           <Ionicons color={colors.primaryDark} name="trending-up" size={40} />
-          <Text style={styles.insightTitle}>Great focus last week!</Text>
-          <Text style={styles.insightBody}>You focused 2 more sessions than last week. Your mornings were strongest.</Text>
+          <Text style={styles.insightTitle}>{currentInsight.observation}</Text>
+          <Text style={styles.insightBody}>{currentInsight.evidence}</Text>
           <Surface style={styles.suggestion}>
             <Ionicons color={colors.primaryDark} name="bulb-outline" size={24} />
             <View style={styles.grow}>
-              <Text style={styles.suggestionTitle}>Keep mornings for deep work.</Text>
-              <Text style={styles.meta}>Protect 90–120 minutes each morning.</Text>
+              <Text style={styles.suggestionTitle}>{currentInsight.suggestedAction}</Text>
+              <Text style={styles.meta}>Apply keeps it visible here with Undo.</Text>
             </View>
           </Surface>
           <View style={styles.actions}>
-            <View style={styles.grow}><PrimaryButton label="Apply" onPress={() => setInsight("applied")} /></View>
-            <View style={styles.grow}><PrimaryButton label="Dismiss" onPress={() => setInsight("dismissed")} secondary /></View>
+            <View style={styles.grow}><PrimaryButton label="Apply" onPress={() => setInsightStatus("applied")} /></View>
+            <View style={styles.grow}><PrimaryButton label="Dismiss" onPress={() => setInsightStatus("dismissed")} secondary /></View>
           </View>
         </View>
-      ) : insight === "dismissed" ? (
+      ) : currentInsight && currentInsightStatus === "dismissed" ? (
         <Surface style={styles.emptyInsight}>
           <Text style={styles.suggestionTitle}>Insight dismissed</Text>
-          <Pressable accessibilityRole="button" onPress={() => setInsight("available")}>
+          <Pressable accessibilityRole="button" onPress={() => setInsightStatus("new")}>
             <Text style={styles.undo}>Undo</Text>
           </Pressable>
         </Surface>
+      ) : !currentInsight ? (
+        <Surface style={styles.emptyInsight}>
+          <Text style={styles.suggestionTitle}>Not enough data yet</Text>
+          <Text style={styles.meta}>Record at least 5 focus sessions for a weekly insight.</Text>
+        </Surface>
       ) : null}
 
-      {insight === "applied" ? (
+      {(currentInsight && currentInsightStatus === "applied") || insights?.appliedInsight ? (
         <>
           <SectionLabel>Applied change</SectionLabel>
           <Surface style={styles.applied}>
             <Ionicons color={colors.primaryDark} name="calendar-outline" size={24} />
             <View style={styles.grow}>
-              <Text style={styles.suggestionTitle}>Morning focus block</Text>
-              <Text style={styles.meta}>8–10 AM weekdays</Text>
+              <Text style={styles.suggestionTitle}>{(currentInsightStatus === "applied" ? currentInsight?.suggestedAction : insights?.appliedInsight?.suggestedAction) ?? "Weekly change"}</Text>
+              <Text style={styles.meta}>Visible and reversible</Text>
             </View>
-            <Pressable accessibilityRole="button" onPress={() => setInsight("available")}>
+            <Pressable accessibilityRole="button" onPress={() => setInsightStatus("new")}>
               <Text style={styles.undo}>Undo</Text>
             </Pressable>
           </Surface>
         </>
       ) : null}
+
+      <SectionLabel>Reflection summary</SectionLabel>
+      <Surface style={styles.list}>
+        {(insights?.reflectionSummary ?? []).map((item) => (
+          <View key={item.tag} style={styles.row}>
+            <Text style={styles.suggestionTitle}>{item.tag}</Text>
+            <Text style={styles.meta}>{item.count} days</Text>
+          </View>
+        ))}
+        {insights?.reflectionSummary.length === 0 ? <Text style={styles.emptyText}>No reflections in this range.</Text> : null}
+      </Surface>
+
+      <SectionLabel>Money summary</SectionLabel>
+      <Surface style={styles.list}>
+        {(insights?.categorySummary ?? []).map((item) => (
+          <View key={item.category} style={styles.barRow}>
+            <View style={styles.barLabel}>
+              <Text style={styles.suggestionTitle}>{item.category}</Text>
+              <Text style={styles.meta}>{moneyText(item.amount)}</Text>
+            </View>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, { width: `${Math.max(8, Math.round((item.amount / maxCategory) * 100))}%` as `${number}%` }]} />
+            </View>
+          </View>
+        ))}
+        {insights?.categorySummary.length === 0 ? <Text style={styles.emptyText}>No confirmed expenses in this range.</Text> : null}
+      </Surface>
     </Screen>
+  );
+}
+
+function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -73,6 +175,12 @@ function Stat({ color, detail, label, value }: { color: string; detail: string; 
 }
 
 const styles = StyleSheet.create({
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
+  chipTextSelected: { color: colors.surface },
+  dateRow: { flexDirection: "row", gap: spacing.sm, position: "relative", zIndex: 20 },
   stats: { flexDirection: "row", gap: spacing.sm },
   stat: { borderRadius: radii.card, flex: 1, minHeight: 112, padding: spacing.md },
   statLabel: { color: colors.text, fontSize: 12 },
@@ -86,6 +194,13 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   actions: { flexDirection: "row", gap: spacing.sm },
   applied: { alignItems: "center", flexDirection: "row", gap: spacing.md, padding: spacing.md },
-  emptyInsight: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", padding: spacing.md },
+  emptyInsight: { gap: spacing.sm, padding: spacing.md },
   undo: { color: colors.primaryDark, fontSize: 14, fontWeight: "700", minHeight: 44, paddingTop: 12 },
+  list: { gap: spacing.md, padding: spacing.md },
+  row: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  barRow: { gap: spacing.sm },
+  barLabel: { flexDirection: "row", justifyContent: "space-between", gap: spacing.sm },
+  barTrack: { backgroundColor: colors.sageSurface, borderRadius: radii.pill, height: 10, overflow: "hidden" },
+  barFill: { backgroundColor: colors.primary, height: "100%" },
+  emptyText: { color: colors.muted, fontSize: 14 },
 });

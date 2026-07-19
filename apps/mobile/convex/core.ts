@@ -24,6 +24,7 @@ const focusCategory = v.object({
 const task = v.object({
   _id: v.id("tasks"),
   _creationTime: v.number(),
+  completedAt: v.optional(v.number()),
   location: v.optional(v.string()),
   meetingLink: v.optional(v.string()),
   note: v.optional(v.string()),
@@ -79,6 +80,8 @@ const settings = v.object({
   onboardedAt: v.number(),
   reflectionHour: v.number(),
 });
+
+const weeklyInsightStatus = v.union(v.literal("new"), v.literal("applied"), v.literal("dismissed"));
 
 async function firstActiveTimer(ctx: QueryCtx | MutationCtx) {
   return (
@@ -197,7 +200,125 @@ export const completeTask = mutation({
   args: { taskId: v.id("tasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.taskId, { status: "done" });
+    await ctx.db.patch(args.taskId, { completedAt: Date.now(), status: "done" });
+    return null;
+  },
+});
+
+export const insights = query({
+  args: { from: v.number(), to: v.number() },
+  returns: v.object({
+    appliedInsight: v.union(
+      v.object({
+        _id: v.id("weeklyInsights"),
+        _creationTime: v.number(),
+        createdAt: v.number(),
+        evidence: v.string(),
+        observation: v.string(),
+        status: weeklyInsightStatus,
+        suggestedAction: v.string(),
+      }),
+      v.null(),
+    ),
+    categorySummary: v.array(v.object({ amount: v.number(), category: v.string() })),
+    completedTasks: v.number(),
+    currentInsight: v.union(
+      v.object({
+        _id: v.optional(v.id("weeklyInsights")),
+        evidence: v.string(),
+        observation: v.string(),
+        status: weeklyInsightStatus,
+        suggestedAction: v.string(),
+      }),
+      v.null(),
+    ),
+    focusCategoryName: v.string(),
+    focusMinutes: v.number(),
+    focusSessions: v.number(),
+    reflectionSummary: v.array(v.object({ count: v.number(), tag: v.string() })),
+    spent: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const from = Math.max(0, Math.min(args.from, args.to));
+    const to = Math.min(Math.max(args.from, args.to), from + 366 * 24 * MS_PER_HOUR);
+    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    const focus = settingsDoc ? await ctx.db.get(settingsDoc.focusCategoryId) : null;
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status_and_completedAt", (q) =>
+        q.eq("status", "done").gte("completedAt", from).lte("completedAt", to),
+      )
+      .take(200);
+    const sessions = focus
+      ? await ctx.db
+          .query("focusSessions")
+          .withIndex("by_category_and_completedAt", (q) =>
+            q.eq("categoryId", focus._id).gte("completedAt", from).lte("completedAt", to),
+          )
+          .take(200)
+      : [];
+    const transactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_status_and_occurredAt", (q) =>
+        q.eq("status", "confirmed").gte("occurredAt", from).lte("occurredAt", to),
+      )
+      .take(200);
+    const reflections = await ctx.db
+      .query("reflections")
+      .withIndex("by_reflectedAt", (q) => q.gte("reflectedAt", from).lte("reflectedAt", to))
+      .take(100);
+    const [currentInsight] = await ctx.db
+      .query("weeklyInsights")
+      .withIndex("by_status_and_createdAt", (q) => q.eq("status", "new"))
+      .order("desc")
+      .take(1);
+    const [appliedInsight] = await ctx.db
+      .query("weeklyInsights")
+      .withIndex("by_status_and_createdAt", (q) => q.eq("status", "applied"))
+      .order("desc")
+      .take(1);
+    const focusMinutes = sessions.reduce((total, session) => total + session.durationMinutes, 0);
+    const expenses = transactions.filter((item) => (item.type ?? "expense") === "expense");
+    const categoryTotals = new Map<string, number>();
+    for (const item of expenses) categoryTotals.set(item.category, (categoryTotals.get(item.category) ?? 0) + item.amount);
+    const tagTotals = new Map<string, number>();
+    for (const reflection of reflections) {
+      for (const tag of reflection.tags) tagTotals.set(tag, (tagTotals.get(tag) ?? 0) + 1);
+    }
+    const computedInsight = sessions.length >= 5 && !currentInsight
+      ? {
+          evidence: `${sessions.length} sessions and ${focusMinutes} minutes recorded in this range.`,
+          observation: `${focus?.name ?? "Focus"} has enough recent history to tune next week.`,
+          status: "new" as const,
+          suggestedAction: `Keep one ${focus?.name ?? "focus"} block on your strongest available day.`,
+        }
+      : null;
+
+    return {
+      appliedInsight: appliedInsight ?? null,
+      categorySummary: [...categoryTotals.entries()]
+        .map(([category, amount]) => ({ amount, category }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 5),
+      completedTasks: tasks.length,
+      currentInsight: currentInsight ?? computedInsight,
+      focusCategoryName: focus?.name ?? "Focus",
+      focusMinutes,
+      focusSessions: sessions.length,
+      reflectionSummary: [...tagTotals.entries()]
+        .map(([tag, count]) => ({ count, tag }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5),
+      spent: expenses.reduce((total, item) => total + item.amount, 0),
+    };
+  },
+});
+
+export const setWeeklyInsightStatus = mutation({
+  args: { insightId: v.id("weeklyInsights"), status: weeklyInsightStatus },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.insightId, { status: args.status });
     return null;
   },
 });
