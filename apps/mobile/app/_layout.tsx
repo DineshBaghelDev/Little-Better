@@ -19,9 +19,10 @@ export default function RootLayout() {
   return (
     <OptionalConvexProvider>
       <Stack
-        initialRouteName="onboarding"
+        initialRouteName="index"
         screenOptions={{ contentStyle: { backgroundColor: colors.background }, headerShown: false }}
       >
+        <Stack.Screen name="index" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="focus" options={{ presentation: "fullScreenModal" }} />

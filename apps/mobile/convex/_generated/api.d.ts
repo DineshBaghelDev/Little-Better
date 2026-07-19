@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as core from "../core.js";
 import type * as health from "../health.js";
 
 import type {
@@ -17,6 +18,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  core: typeof core;
   health: typeof health;
 }>;
 
