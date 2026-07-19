@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
+import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
 import { SectionLabel, Surface } from "../../src/components/ui";
 import { colors, radii, spacing } from "../../src/theme";
@@ -12,14 +13,8 @@ import { colors, radii, spacing } from "../../src/theme";
 type TransactionType = "expense" | "income";
 type PaymentMethod = "cash" | "online";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 function moneyText(value: number) {
   return `Rs ${value.toLocaleString("en-IN")}`;
-}
-
-function dateInput(ms: number) {
-  return new Date(ms).toISOString().slice(0, 10);
 }
 
 function parseDate(value: string) {
@@ -142,12 +137,15 @@ export default function MoneyScreen() {
             <View key={category._id} style={styles.categoryChip}>
               <Chip label={category.name} selected={expense.category === category.name} onPress={() => setExpense((current) => ({ ...current, category: category.name }))} />
               <Pressable accessibilityLabel={`Delete ${category.name} category`} accessibilityRole="button" onPress={() => removeCategory({ categoryId: category._id })} style={styles.deleteCategory}>
-                <Ionicons color={colors.coral} name="close" size={16} />
+                <Ionicons color={colors.coral} name="trash-outline" size={16} />
               </Pressable>
             </View>
           ))}
-          <Chip label={showCategoryForm ? "Close category" : "Add category"} selected={showCategoryForm} onPress={() => setShowCategoryForm((open) => !open)} />
         </View>
+        <Pressable accessibilityRole="button" onPress={() => setShowCategoryForm((open) => !open)} style={styles.categoryToggle}>
+          <Ionicons color={colors.primaryDark} name={showCategoryForm ? "remove" : "add"} size={20} />
+          <Text style={styles.categoryToggleText}>{showCategoryForm ? "Close category form" : "Add category"}</Text>
+        </Pressable>
         {showCategoryForm ? (
           <View style={styles.inline}>
             <TextInput accessibilityLabel="New category" onChangeText={setNewCategory} placeholder="New category" placeholderTextColor={colors.muted} style={[styles.input, styles.grow]} value={newCategory} />
@@ -156,12 +154,7 @@ export default function MoneyScreen() {
             </Pressable>
           </View>
         ) : null}
-        <View style={styles.inline}>
-          <Pressable accessibilityRole="button" onPress={() => setExpense((current) => ({ ...current, date: dateInput(parseDate(current.date) - DAY_MS) }))} style={styles.iconButton}><Ionicons color={colors.primaryDark} name="chevron-back" size={20} /></Pressable>
-          <TextInput accessibilityLabel="Transaction date" onChangeText={(date) => setExpense((current) => ({ ...current, date }))} placeholder="YYYY-MM-DD" placeholderTextColor={colors.muted} style={[styles.input, styles.grow]} value={expense.date} />
-          <Pressable accessibilityRole="button" onPress={() => setExpense((current) => ({ ...current, date: dateInput(Date.now()) }))} style={styles.todayButton}><Text style={styles.todayText}>Today</Text></Pressable>
-          <Pressable accessibilityRole="button" onPress={() => setExpense((current) => ({ ...current, date: dateInput(parseDate(current.date) + DAY_MS) }))} style={styles.iconButton}><Ionicons color={colors.primaryDark} name="chevron-forward" size={20} /></Pressable>
-        </View>
+        <DatePickerField label="Transaction date" onChange={(date) => setExpense((current) => ({ ...current, date }))} value={expense.date} />
         <TextInput accessibilityLabel="Transaction note" onChangeText={(note) => setExpense((current) => ({ ...current, note }))} placeholder="Note (optional)" placeholderTextColor={colors.muted} style={styles.input} value={expense.note} />
         <Pressable accessibilityRole="button" onPress={saveTransaction} style={styles.addButton}>
           <Text style={styles.addButtonText}>Save transaction</Text>
@@ -178,7 +171,7 @@ export default function MoneyScreen() {
             </View>
             <Pressable accessibilityRole="button" onPress={() => {
               setEditingAccount(account._id);
-              setAccountForm({ balance: String(account.balance), name: account.name });
+              setAccountForm({ balance: String(account.baseBalance), name: account.name });
               setShowAccountForm(true);
             }} style={styles.iconButton}>
               <Ionicons color={colors.primaryDark} name="create-outline" size={20} />
@@ -292,15 +285,15 @@ const styles = StyleSheet.create({
   chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   chipTextSelected: { color: colors.surface },
   categoryChip: { flexDirection: "row" },
-  deleteCategory: { alignItems: "center", height: 44, justifyContent: "center", marginLeft: -10, width: 28 },
+  deleteCategory: { alignItems: "center", backgroundColor: colors.coralSurface, borderRadius: radii.pill, height: 44, justifyContent: "center", marginLeft: -10, width: 34 },
+  categoryToggle: { alignItems: "center", flexDirection: "row", gap: spacing.sm, minHeight: 44 },
+  categoryToggleText: { color: colors.primaryDark, fontSize: 14, fontWeight: "700" },
   inline: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   grow: { flex: 1 },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 14, minHeight: 44, paddingHorizontal: spacing.sm },
   addButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.control, justifyContent: "center", minHeight: 48 },
   addButtonText: { color: colors.surface, fontSize: 15, fontWeight: "700" },
   iconButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
-  todayButton: { alignItems: "center", backgroundColor: colors.sageSurface, borderRadius: radii.control, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
-  todayText: { color: colors.primaryDark, fontSize: 13, fontWeight: "700" },
   accountRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 72, paddingHorizontal: spacing.md },
   accountToggle: { alignItems: "center", flexDirection: "row", gap: spacing.sm, minHeight: 56, paddingHorizontal: spacing.md },
   accountToggleText: { color: colors.primaryDark, fontSize: 14, fontWeight: "700" },
