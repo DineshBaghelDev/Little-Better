@@ -8,7 +8,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { CategoryDropdown } from "../src/components/CategoryDropdown";
-import { DatePickerField } from "../src/components/DatePickerField";
+import { ChoiceDropdown } from "../src/components/ChoiceDropdown";
+import { DatePickerField, dateInput } from "../src/components/DatePickerField";
 import { PrimaryButton, Surface } from "../src/components/ui";
 import { colors, radii, spacing } from "../src/theme";
 
@@ -19,6 +20,15 @@ const types = [
   ["Note", "Save as a task note", "document-text-outline", colors.mustardSurface],
   ["Voice", "Type the captured words", "mic-outline", colors.coralSurface],
 ] as const;
+
+const transactionTypeOptions = [
+  { label: "Expense", value: "expense" },
+  { label: "Income", value: "income" },
+] satisfies { label: string; value: "expense" | "income" }[];
+const paymentOptions = [
+  { label: "Online", value: "online" },
+  { label: "Cash", value: "cash" },
+] satisfies { label: string; value: "cash" | "online" }[];
 
 export default function QuickAddModal() {
   const ensureMoneyDefaults = useMutation(api.core.ensureMoneyDefaults);
@@ -33,7 +43,7 @@ export default function QuickAddModal() {
     accountId: undefined as Id<"accounts"> | undefined,
     amount: "",
     category: "Food",
-    date: new Date().toISOString().slice(0, 10),
+    date: dateInput(Date.now()),
     merchant: "",
     note: "",
     paymentMethod: "online" as "cash" | "online",
@@ -48,8 +58,8 @@ export default function QuickAddModal() {
   }, [ensureMoneyDefaults]);
 
   function expenseDate() {
-    const parsed = new Date(expense.date);
-    return Number.isNaN(parsed.getTime()) ? undefined : parsed.getTime();
+    const [year, month, day] = expense.date.split("-").map(Number);
+    return year && month && day ? new Date(year, month - 1, day).getTime() : undefined;
   }
 
   async function save() {
@@ -110,12 +120,8 @@ export default function QuickAddModal() {
             <Text style={styles.selectedLabel}>{selected}</Text>
             {selected === "Expense" ? (
               <>
-                <View style={styles.chips}>
-                  <Chip label="Expense" selected={expense.type === "expense"} onPress={() => setExpense((current) => ({ ...current, category: "Food", type: "expense" }))} />
-                  <Chip label="Income" selected={expense.type === "income"} onPress={() => setExpense((current) => ({ ...current, category: "Salary", type: "income" }))} />
-                  <Chip label="Online" selected={expense.paymentMethod === "online"} onPress={() => setExpense((current) => ({ ...current, paymentMethod: "online" }))} />
-                  <Chip label="Cash" selected={expense.paymentMethod === "cash"} onPress={() => setExpense((current) => ({ ...current, paymentMethod: "cash" }))} />
-                </View>
+                <ChoiceDropdown label="Type" onSelect={(type) => setExpense((current) => ({ ...current, category: type === "income" ? "Salary" : "Food", type }))} options={transactionTypeOptions} value={expense.type} />
+                <ChoiceDropdown label="Payment" onSelect={(paymentMethod) => setExpense((current) => ({ ...current, paymentMethod }))} options={paymentOptions} value={expense.paymentMethod} />
                 <View style={styles.chips}>
                   {(money?.accounts ?? []).map((account) => (
                     <Chip key={account._id} label={account.name} selected={(expense.accountId ?? money?.accounts[0]?._id) === account._id} onPress={() => setExpense((current) => ({ ...current, accountId: account._id }))} />
