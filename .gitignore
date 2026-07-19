@@ -15,10 +15,3 @@ android/
 web-build/
 expo-env.d.ts
 *.tsbuildinfo
-docs/
-specs/
-AGENTS.md 
-CLAUDE.md 
-.claude
-.agents
-project-requirements/
