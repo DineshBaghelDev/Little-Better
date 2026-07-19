@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { router, Tabs } from "expo-router";
+import { Pressable } from "react-native";
 
 import { colors } from "../../src/theme";
 
@@ -13,36 +14,44 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 68,
-          paddingBottom: 10,
+          height: 72,
+          paddingBottom: 8,
           paddingTop: 8,
         },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       }}
     >
       <Tabs.Screen
-        name="index"
+        name="today"
         options={{
           title: "Today",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons color={color} name="sunny-outline" size={size} />
+            <Ionicons color={color} name="home-outline" size={size} />
           ),
         }}
       />
       <Tabs.Screen
         name="calendar"
         options={{
-          title: "Calendar",
+          title: "Plan",
           tabBarIcon: ({ color, size }) => (
             <Ionicons color={color} name="calendar-outline" size={size} />
           ),
         }}
       />
       <Tabs.Screen
-        name="quick-add"
+        name="add"
         options={{
           title: "Add",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons color={color} name="add-circle-outline" size={size + 4} />
+          tabBarButton: () => (
+            <Pressable
+              accessibilityLabel="Quick add"
+              accessibilityRole="button"
+              onPress={() => router.push("/quick-add")}
+              style={{ alignItems: "center", flex: 1, justifyContent: "center" }}
+            >
+              <Ionicons color={colors.primary} name="add-circle" size={42} />
+            </Pressable>
           ),
         }}
       />
