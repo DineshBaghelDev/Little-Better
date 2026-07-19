@@ -77,9 +77,13 @@ export default defineSchema({
     reflectionHour: v.number(),
   }),
   weeklyInsights: defineTable({
+    actionHour: v.optional(v.number()),
+    actionType: v.optional(v.literal("move_focus_reminder")),
+    appliedAt: v.optional(v.number()),
     createdAt: v.number(),
     evidence: v.string(),
     observation: v.string(),
+    previousHour: v.optional(v.number()),
     status: v.union(
       v.literal("new"),
       v.literal("applied"),

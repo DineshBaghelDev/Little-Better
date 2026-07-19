@@ -84,6 +84,30 @@ const settings = v.object({
 
 const weeklyInsightStatus = v.union(v.literal("new"), v.literal("applied"), v.literal("dismissed"));
 
+const weeklyInsight = v.object({
+  _id: v.id("weeklyInsights"),
+  _creationTime: v.number(),
+  actionHour: v.optional(v.number()),
+  actionType: v.optional(v.literal("move_focus_reminder")),
+  appliedAt: v.optional(v.number()),
+  createdAt: v.number(),
+  evidence: v.string(),
+  observation: v.string(),
+  previousHour: v.optional(v.number()),
+  status: weeklyInsightStatus,
+  suggestedAction: v.string(),
+});
+
+const weeklyInsightPreview = v.object({
+  _id: v.optional(v.id("weeklyInsights")),
+  actionHour: v.optional(v.number()),
+  actionType: v.optional(v.literal("move_focus_reminder")),
+  evidence: v.string(),
+  observation: v.string(),
+  status: weeklyInsightStatus,
+  suggestedAction: v.string(),
+});
+
 const todayTaskTone = v.union(v.literal("normal"), v.literal("warning"));
 
 const todayItem = v.union(
@@ -147,6 +171,50 @@ function focusProgressLabel(
     return { complete: days.size >= target, label: `${days.size} of ${target} days this week` };
   }
   return { complete: sessions.length >= target, label: `${sessions.length} of ${target} sessions this week` };
+}
+
+function hourLabel(hour: number) {
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const display = hour % 12 || 12;
+  return `${display} ${suffix}`;
+}
+
+function computedFocusTimeInsight(focus: Doc<"focusCategories"> | null, sessions: Doc<"focusSessions">[]) {
+  if (!focus || sessions.length < 5) {
+    return {
+      insight: null,
+      requirement: `Record 5 focus sessions in this range; ${sessions.length} recorded.`,
+    };
+  }
+
+  const counts = new Map<number, number>();
+  for (const session of sessions) {
+    const hour = new Date(session.completedAt).getHours();
+    counts.set(hour, (counts.get(hour) ?? 0) + 1);
+  }
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const [topHour, topCount] = ranked[0] ?? [focus.preferredHour ?? 9, 0];
+  const secondCount = ranked[1]?.[1] ?? 0;
+
+  if (topCount < 3 || topCount - secondCount < 2 || topHour === focus.preferredHour) {
+    return {
+      insight: null,
+      requirement: "Record 5 sessions with a clear time pattern; the current range is too even.",
+    };
+  }
+
+  const actionHour = Math.max(0, Math.min(23, topHour));
+  return {
+    insight: {
+      actionHour,
+      actionType: "move_focus_reminder" as const,
+      evidence: `${topCount} of ${sessions.length} ${focus.name} sessions were around ${hourLabel(topHour)}; the next strongest hour had ${secondCount}.`,
+      observation: `Your ${focus.name} sessions cluster around ${hourLabel(topHour)}.`,
+      status: "new" as const,
+      suggestedAction: `Move the ${focus.name} focus reminder to ${hourLabel(actionHour)}.`,
+    },
+    requirement: null,
+  };
 }
 
 async function firstActiveTimer(ctx: QueryCtx | MutationCtx) {
@@ -357,33 +425,14 @@ export const undoCompleteTask = mutation({
 export const insights = query({
   args: { from: v.number(), to: v.number() },
   returns: v.object({
-    appliedInsight: v.union(
-      v.object({
-        _id: v.id("weeklyInsights"),
-        _creationTime: v.number(),
-        createdAt: v.number(),
-        evidence: v.string(),
-        observation: v.string(),
-        status: weeklyInsightStatus,
-        suggestedAction: v.string(),
-      }),
-      v.null(),
-    ),
+    appliedInsight: v.union(weeklyInsight, v.null()),
     categorySummary: v.array(v.object({ amount: v.number(), category: v.string() })),
     completedTasks: v.number(),
-    currentInsight: v.union(
-      v.object({
-        _id: v.optional(v.id("weeklyInsights")),
-        evidence: v.string(),
-        observation: v.string(),
-        status: weeklyInsightStatus,
-        suggestedAction: v.string(),
-      }),
-      v.null(),
-    ),
+    currentInsight: v.union(weeklyInsightPreview, v.null()),
     focusCategoryName: v.string(),
     focusMinutes: v.number(),
     focusSessions: v.number(),
+    insightRequirement: v.union(v.string(), v.null()),
     reflectionSummary: v.array(v.object({ count: v.number(), tag: v.string() })),
     spent: v.number(),
   }),
@@ -426,6 +475,11 @@ export const insights = query({
       .withIndex("by_status_and_createdAt", (q) => q.eq("status", "applied"))
       .order("desc")
       .take(1);
+    const [dismissedInsight] = await ctx.db
+      .query("weeklyInsights")
+      .withIndex("by_status_and_createdAt", (q) => q.eq("status", "dismissed"))
+      .order("desc")
+      .take(1);
     const focusMinutes = sessions.reduce((total, session) => total + session.durationMinutes, 0);
     const expenses = transactions.filter((item) => (item.type ?? "expense") === "expense");
     const categoryTotals = new Map<string, number>();
@@ -434,14 +488,7 @@ export const insights = query({
     for (const reflection of reflections) {
       for (const tag of reflection.tags) tagTotals.set(tag, (tagTotals.get(tag) ?? 0) + 1);
     }
-    const computedInsight = sessions.length >= 5 && !currentInsight
-      ? {
-          evidence: `${sessions.length} sessions and ${focusMinutes} minutes recorded in this range.`,
-          observation: `${focus?.name ?? "Focus"} has enough recent history to tune next week.`,
-          status: "new" as const,
-          suggestedAction: `Keep one ${focus?.name ?? "focus"} block on your strongest available day.`,
-        }
-      : null;
+    const computed = currentInsight || dismissedInsight ? { insight: null, requirement: null } : computedFocusTimeInsight(focus, sessions);
 
     return {
       appliedInsight: appliedInsight ?? null,
@@ -450,10 +497,11 @@ export const insights = query({
         .sort((a, b) => b.amount - a.amount)
         .slice(0, 5),
       completedTasks: tasks.length,
-      currentInsight: currentInsight ?? computedInsight,
+      currentInsight: currentInsight ?? dismissedInsight ?? computed.insight,
       focusCategoryName: focus?.name ?? "Focus",
       focusMinutes,
       focusSessions: sessions.length,
+      insightRequirement: computed.requirement,
       reflectionSummary: [...tagTotals.entries()]
         .map(([tag, count]) => ({ count, tag }))
         .sort((a, b) => b.count - a.count)
@@ -468,6 +516,93 @@ export const setWeeklyInsightStatus = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.insightId, { status: args.status });
+    return null;
+  },
+});
+
+export const applyWeeklyInsight = mutation({
+  args: {
+    actionHour: v.number(),
+    evidence: v.string(),
+    insightId: v.optional(v.id("weeklyInsights")),
+    observation: v.string(),
+    suggestedAction: v.string(),
+  },
+  returns: v.id("weeklyInsights"),
+  handler: async (ctx, args) => {
+    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    if (!settingsDoc) throw new Error("App settings are required before applying insights.");
+    const focus = await ctx.db.get(settingsDoc.focusCategoryId);
+    if (!focus) throw new Error("Focus category is required before applying insights.");
+    const actionHour = Math.max(0, Math.min(23, Math.round(args.actionHour)));
+    const previousHour = focus.preferredHour;
+    await ctx.db.patch(focus._id, { preferredHour: actionHour });
+
+    if (args.insightId) {
+      await ctx.db.patch(args.insightId, {
+        actionHour,
+        actionType: "move_focus_reminder",
+        appliedAt: Date.now(),
+        previousHour,
+        status: "applied",
+      });
+      return args.insightId;
+    }
+
+    return await ctx.db.insert("weeklyInsights", {
+      actionHour,
+      actionType: "move_focus_reminder",
+      appliedAt: Date.now(),
+      createdAt: Date.now(),
+      evidence: args.evidence,
+      observation: args.observation,
+      previousHour,
+      status: "applied",
+      suggestedAction: args.suggestedAction,
+    });
+  },
+});
+
+export const dismissWeeklyInsight = mutation({
+  args: {
+    actionHour: v.optional(v.number()),
+    evidence: v.string(),
+    insightId: v.optional(v.id("weeklyInsights")),
+    observation: v.string(),
+    suggestedAction: v.string(),
+  },
+  returns: v.id("weeklyInsights"),
+  handler: async (ctx, args) => {
+    if (args.insightId) {
+      await ctx.db.patch(args.insightId, { status: "dismissed" });
+      return args.insightId;
+    }
+    return await ctx.db.insert("weeklyInsights", {
+      actionHour: args.actionHour,
+      actionType: args.actionHour === undefined ? undefined : "move_focus_reminder",
+      createdAt: Date.now(),
+      evidence: args.evidence,
+      observation: args.observation,
+      status: "dismissed",
+      suggestedAction: args.suggestedAction,
+    });
+  },
+});
+
+export const undoWeeklyInsight = mutation({
+  args: { insightId: v.id("weeklyInsights") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const insight = await ctx.db.get(args.insightId);
+    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    if (!insight || !settingsDoc || insight.actionType !== "move_focus_reminder") return null;
+    if (insight.previousHour !== undefined) {
+      await ctx.db.patch(settingsDoc.focusCategoryId, { preferredHour: insight.previousHour });
+    }
+    await ctx.db.patch(args.insightId, {
+      appliedAt: undefined,
+      status: "new",
+    });
     return null;
   },
 });

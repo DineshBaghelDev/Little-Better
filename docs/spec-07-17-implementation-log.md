@@ -11,3 +11,5 @@
 - Added task Details and Reschedule actions on ranked Today task cards.
 - Reworked Money so budget remaining is the first card, over-budget state is coral with the overage stated, pending confirmations sit above confirmed history, creation is no longer on the Money tab, and summaries are collapsed into a deeper view.
 - Hid category management inside Money's edit dropdown while preserving it in Quick Add.
+- Replaced filler weekly insights with a thresholded focus-time detector: five sessions minimum, at least three sessions in the strongest hour, and a two-session gap over the next strongest hour.
+- Added persisted Apply, Edit, Dismiss, and Undo for weekly insights. Apply moves the focus category's preferred hour and stores the prior hour for undo after restart.
