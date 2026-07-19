@@ -15,3 +15,4 @@
 - Added persisted Apply, Edit, Dismiss, and Undo for weekly insights. Apply moves the focus category's preferred hour and stores the prior hour for undo after restart.
 - Replaced the inline mascot image renderer with a flat React Native mascot component with calm, focus, reflection, completion, and pointing variants.
 - Added shared typography tokens, changed the focus timer to a live segmented progress ring, and prevented Progress stat values from wrapping.
+- Added persisted reflection skip/snooze state keyed by local date, with one snooze per night and empty Done treated as Skip.

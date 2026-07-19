@@ -64,6 +64,12 @@ export default defineSchema({
     reflectedAt: v.number(),
     tags: v.array(v.string()),
   }).index("by_reflectedAt", ["reflectedAt"]),
+  reflectionDismissals: defineTable({
+    action: v.union(v.literal("skip"), v.literal("snooze")),
+    createdAt: v.number(),
+    dateKey: v.string(),
+    snoozeUntil: v.optional(v.number()),
+  }).index("by_dateKey", ["dateKey"]),
   activeTimers: defineTable({
     categoryId: v.id("focusCategories"),
     elapsedSeconds: v.number(),

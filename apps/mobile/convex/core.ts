@@ -145,6 +145,11 @@ function startOfWeek(value: number) {
   return day.getTime();
 }
 
+function localDateKey(value: number) {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, "0")}-${`${date.getDate()}`.padStart(2, "0")}`;
+}
+
 function minutesUntil(from: number, to: number) {
   return Math.max(1, Math.ceil((to - from) / (60 * 1000)));
 }
@@ -325,6 +330,11 @@ export const today = query({
       .order("desc")
       .take(3);
     const [lastReflection] = await ctx.db.query("reflections").order("desc").take(1);
+    const dismissal = await ctx.db
+      .query("reflectionDismissals")
+      .withIndex("by_dateKey", (q) => q.eq("dateKey", localDateKey(now)))
+      .order("desc")
+      .first();
     const focusSessions = focus
       ? await ctx.db
           .query("focusSessions")
@@ -398,7 +408,8 @@ export const today = query({
       reflectionDue:
         !!settingsDoc &&
         new Date(now).getHours() >= settingsDoc.reflectionHour &&
-        (!lastReflection || lastReflection.reflectedAt < dayStart),
+        (!lastReflection || lastReflection.reflectedAt < dayStart) &&
+        (!dismissal || (dismissal.action === "snooze" && (dismissal.snoozeUntil ?? 0) <= now)),
       settings: settingsDoc,
     };
   },
@@ -654,11 +665,51 @@ export const addReflection = mutation({
   args: { note: v.string(), tags: v.array(v.string()) },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (!args.note.trim() && args.tags.length === 0) return null;
     await ctx.db.insert("reflections", {
       note: args.note.trim() || undefined,
       reflectedAt: Date.now(),
       tags: args.tags,
     });
+    return null;
+  },
+});
+
+export const dismissReflection = mutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const now = Date.now();
+    const dateKey = localDateKey(now);
+    const existing = await ctx.db
+      .query("reflectionDismissals")
+      .withIndex("by_dateKey", (q) => q.eq("dateKey", dateKey))
+      .order("desc")
+      .first();
+    if (existing) await ctx.db.patch(existing._id, { action: "skip", createdAt: now, snoozeUntil: undefined });
+    else await ctx.db.insert("reflectionDismissals", { action: "skip", createdAt: now, dateKey });
+    return null;
+  },
+});
+
+export const snoozeReflection = mutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const now = Date.now();
+    const dateKey = localDateKey(now);
+    const existing = await ctx.db
+      .query("reflectionDismissals")
+      .withIndex("by_dateKey", (q) => q.eq("dateKey", dateKey))
+      .order("desc")
+      .first();
+    if (existing?.action === "snooze") {
+      await ctx.db.patch(existing._id, { action: "skip", createdAt: now, snoozeUntil: undefined });
+      return null;
+    }
+    const snoozeUntil = now + 30 * 60 * 1000;
+    if (existing) await ctx.db.patch(existing._id, { action: "snooze", createdAt: now, snoozeUntil });
+    else await ctx.db.insert("reflectionDismissals", { action: "snooze", createdAt: now, dateKey, snoozeUntil });
     return null;
   },
 });
