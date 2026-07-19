@@ -25,6 +25,7 @@ function parseDate(value: string) {
 
 export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState(dateInput(Date.now()));
+  const [dateModalOpen, setDateModalOpen] = useState(false);
   const dayStart = useMemo(() => parseDate(selectedDate), [selectedDate]);
   const selectedDay = useMemo(() => new Date(dayStart), [dayStart]);
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => new Date(dayStart + index * DAY_MS)), [dayStart]);
@@ -60,7 +61,11 @@ export default function CalendarScreen() {
 
   return (
     <Screen
-      headerAction={<Ionicons color={colors.text} name="calendar-outline" size={24} />}
+      headerAction={
+        <Pressable accessibilityLabel="Choose calendar date" accessibilityRole="button" onPress={() => setDateModalOpen(true)} style={styles.headerIcon}>
+          <Ionicons color={colors.text} name="calendar-outline" size={24} />
+        </Pressable>
+      }
       subtitle="Selected day"
       title="Calendar"
     >
@@ -84,10 +89,6 @@ export default function CalendarScreen() {
           );
         })}
       </View>
-
-      <Surface style={styles.pickerSurface}>
-        <DatePickerField label="Calendar date" onChange={setSelectedDate} value={selectedDate} />
-      </Surface>
 
       <SectionLabel>{selectedDay.toLocaleDateString([], { day: "numeric", month: "long", weekday: "long" })}</SectionLabel>
       <View style={styles.events}>
@@ -177,6 +178,29 @@ export default function CalendarScreen() {
         ))}
         {calendar?.unscheduledTasks.length === 0 ? <Text style={styles.emptyText}>No unscheduled tasks.</Text> : null}
       </Surface>
+
+      <Modal animationType="fade" transparent visible={dateModalOpen} onRequestClose={() => setDateModalOpen(false)}>
+        <View style={styles.timeBackdrop}>
+          <View style={styles.dateSheet}>
+            <View style={styles.timeHeader}>
+              <Text style={styles.timeTitle}>Choose date</Text>
+              <Pressable accessibilityLabel="Close date picker" accessibilityRole="button" onPress={() => setDateModalOpen(false)} style={styles.closeButton}>
+                <Ionicons color={colors.text} name="close" size={20} />
+              </Pressable>
+            </View>
+            <DatePickerField
+              defaultOpen
+              key={selectedDate}
+              label="Calendar date"
+              onChange={(date) => {
+                setSelectedDate(date);
+                setDateModalOpen(false);
+              }}
+              value={selectedDate}
+            />
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -235,13 +259,13 @@ function ClockTimePicker({ onChange, value }: { onChange: (value: string) => voi
 }
 
 const styles = StyleSheet.create({
+  headerIcon: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
   week: { flexDirection: "row", justifyContent: "space-between" },
   day: { alignItems: "center", borderRadius: 22, gap: 6, minHeight: 64, paddingHorizontal: 10, paddingVertical: 8 },
   daySelected: { backgroundColor: colors.primary },
   dayName: { color: colors.muted, fontSize: 11, fontWeight: "600" },
   date: { color: colors.text, fontSize: 14, fontWeight: "700" },
   dayTextSelected: { color: colors.surface },
-  pickerSurface: { overflow: "visible", padding: spacing.md, zIndex: 10 },
   events: { gap: spacing.md },
   event: { alignItems: "center", flexDirection: "row", minHeight: 76 },
   eventRail: { alignSelf: "stretch", width: 4 },
@@ -266,6 +290,7 @@ const styles = StyleSheet.create({
   timeValue: { color: colors.text, fontSize: 15, fontWeight: "700" },
   timeBackdrop: { alignItems: "center", backgroundColor: "rgba(47,58,51,0.42)", flex: 1, justifyContent: "center", padding: spacing.lg },
   timeSheet: { backgroundColor: colors.surface, borderRadius: 22, gap: spacing.sm, maxWidth: 380, padding: spacing.lg, width: "100%" },
+  dateSheet: { backgroundColor: colors.background, borderRadius: 22, gap: spacing.md, maxWidth: 380, overflow: "visible", padding: spacing.lg, width: "100%" },
   timeHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   timeTitle: { color: colors.text, fontSize: 18, fontWeight: "700" },
   closeButton: { alignItems: "center", height: 40, justifyContent: "center", width: 40 },

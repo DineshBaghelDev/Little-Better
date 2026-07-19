@@ -25,16 +25,18 @@ function parseDateInput(value: string) {
 }
 
 export function DatePickerField({
+  defaultOpen = false,
   label,
   onChange,
   value,
 }: {
+  defaultOpen?: boolean;
   label: string;
   onChange: (value: string) => void;
   value: string;
 }) {
   const selected = useMemo(() => startOfDay(parseDateInput(value)), [value]);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [cursor, setCursor] = useState(() => {
     const date = new Date(selected);
     date.setDate(1);
