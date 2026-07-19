@@ -79,6 +79,7 @@ export default defineSchema({
   appSettings: defineTable({
     focusCategoryId: v.id("focusCategories"),
     monthlyBudget: v.number(),
+    notificationsEnabled: v.optional(v.boolean()),
     onboardedAt: v.number(),
     reflectionHour: v.number(),
   }),

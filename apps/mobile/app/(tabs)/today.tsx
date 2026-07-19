@@ -1,13 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { Screen } from "../../src/components/Screen";
 import { Mascot, PrimaryButton, Surface } from "../../src/components/ui";
+import { scheduleLocalNotifications } from "../../src/notifications";
 import { colors, radii, spacing } from "../../src/theme";
 
 function moneyText(value: number) {
@@ -56,6 +57,43 @@ export default function TodayTabScreen() {
     await undoCompleteTask({ taskId: lastCompleted });
     setLastCompleted(null);
   }
+
+  useEffect(() => {
+    if (!today?.settings?.notificationsEnabled) return;
+    const now = Date.now();
+    const reminders = [];
+    const taskItems = [
+      ...today.rankedItems.filter((item) => item.kind === "task").map((item) => item.task),
+      ...today.laterToday.map((item) => item.task),
+    ];
+    const nextTask = taskItems.find((task) => task.scheduledAt && task.scheduledAt > now);
+    if (nextTask?.scheduledAt) {
+      reminders.push({
+        body: "A planned task is coming up.",
+        date: Math.max(now + 60 * 1000, nextTask.scheduledAt - 30 * 60 * 1000),
+        title: "Upcoming task",
+        url: `/(tabs)/calendar?taskId=${nextTask._id}`,
+      });
+    }
+    const focusHour = today.focusCategory?.preferredHour;
+    if (focusHour !== undefined) {
+      const focusDate = new Date(now);
+      focusDate.setHours(focusHour, 0, 0, 0);
+      if (focusDate.getTime() <= now) focusDate.setDate(focusDate.getDate() + 1);
+      reminders.push({ body: "Start the focus session you chose.", date: focusDate.getTime(), title: "Focus reminder", url: "/focus" });
+    }
+    if (today.settings) {
+      const reflectionDate = new Date(now);
+      reflectionDate.setHours(today.settings.reflectionHour, 0, 0, 0);
+      if (reflectionDate.getTime() <= now) reflectionDate.setDate(reflectionDate.getDate() + 1);
+      reminders.push({ body: "Your evening reflection is ready.", date: reflectionDate.getTime(), title: "Reflection", url: "/reflection" });
+    }
+    if (today.pendingTransactions.length) {
+      reminders.push({ body: "A transaction needs confirmation.", date: now + 5 * 60 * 1000, title: "Pending expense", url: "/(tabs)/money" });
+    }
+    reminders.push({ body: "Review the latest weekly insight when it is ready.", date: now + 24 * 60 * 60 * 1000, title: "Weekly insight", url: "/(tabs)/progress" });
+    scheduleLocalNotifications(reminders.slice(0, 5));
+  }, [today]);
 
   return (
     <Screen

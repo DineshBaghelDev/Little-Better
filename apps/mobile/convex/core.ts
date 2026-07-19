@@ -78,6 +78,7 @@ const settings = v.object({
   _creationTime: v.number(),
   focusCategoryId: v.id("focusCategories"),
   monthlyBudget: v.number(),
+  notificationsEnabled: v.optional(v.boolean()),
   onboardedAt: v.number(),
   reflectionHour: v.number(),
 });
@@ -253,6 +254,7 @@ export const bootstrap = mutation({
   args: {
     focusName: v.string(),
     monthlyBudget: v.number(),
+    notificationsEnabled: v.optional(v.boolean()),
     preferredHour: v.number(),
     reflectionHour: v.number(),
     targetType,
@@ -437,6 +439,7 @@ export const updateSettings = mutation({
   args: {
     focusName: v.string(),
     monthlyBudget: v.number(),
+    notificationsEnabled: v.optional(v.boolean()),
     preferredHour: v.number(),
     reflectionHour: v.number(),
     targetType,
@@ -470,6 +473,7 @@ export const updateSettings = mutation({
     await ctx.db.patch(settingsDoc._id, {
       focusCategoryId,
       monthlyBudget: Math.max(0, Math.round(args.monthlyBudget)),
+      notificationsEnabled: args.notificationsEnabled,
       reflectionHour: Math.max(17, Math.min(23, Math.round(args.reflectionHour))),
     });
     return null;
