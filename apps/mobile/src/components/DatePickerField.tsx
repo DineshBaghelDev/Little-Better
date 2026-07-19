@@ -13,7 +13,15 @@ function startOfDay(value: number) {
 }
 
 export function dateInput(ms: number) {
-  return new Date(ms).toISOString().slice(0, 10);
+  const date = new Date(ms);
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function parseDateInput(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return year && month && day ? new Date(year, month - 1, day).getTime() : Date.now();
 }
 
 export function DatePickerField({
@@ -25,7 +33,7 @@ export function DatePickerField({
   onChange: (value: string) => void;
   value: string;
 }) {
-  const selected = useMemo(() => startOfDay(Date.parse(value) || Date.now()), [value]);
+  const selected = useMemo(() => startOfDay(parseDateInput(value)), [value]);
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(() => {
     const date = new Date(selected);
