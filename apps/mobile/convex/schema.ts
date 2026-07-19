@@ -9,6 +9,8 @@ export default defineSchema({
   }).index("by_status", ["status"]),
   focusCategories: defineTable({
     name: v.string(),
+    preferredHour: v.optional(v.number()),
+    targetValue: v.optional(v.number()),
     targetType: v.union(
       v.literal("sessions_per_week"),
       v.literal("minutes_per_day"),
@@ -36,6 +38,18 @@ export default defineSchema({
     note: v.optional(v.string()),
     reflectedAt: v.number(),
     tags: v.array(v.string()),
+  }),
+  activeTimers: defineTable({
+    categoryId: v.id("focusCategories"),
+    elapsedSeconds: v.number(),
+    startedAt: v.number(),
+    status: v.union(v.literal("running"), v.literal("paused")),
+  }).index("by_status", ["status"]),
+  appSettings: defineTable({
+    focusCategoryId: v.id("focusCategories"),
+    monthlyBudget: v.number(),
+    onboardedAt: v.number(),
+    reflectionHour: v.number(),
   }),
   weeklyInsights: defineTable({
     createdAt: v.number(),
