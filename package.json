@@ -1,0 +1,19 @@
+{
+  "name": "little-better",
+  "private": true,
+  "packageManager": "bun@1.2.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:mobile",
+    "dev:mobile": "npm --workspace apps/mobile run start",
+    "dev:convex": "npm --workspace apps/mobile run convex:dev",
+    "typecheck": "npm --workspace apps/mobile run typecheck",
+    "lint": "npm --workspace apps/mobile run lint"
+  },
+  "devDependencies": {
+    "eslint": "^10.7.0",
+    "prettier": "^3.9.5"
+  }
+}
