@@ -16,3 +16,6 @@
 - Replaced the inline mascot image renderer with a flat React Native mascot component with calm, focus, reflection, completion, and pointing variants.
 - Added shared typography tokens, changed the focus timer to a live segmented progress ring, and prevented Progress stat values from wrapping.
 - Added persisted reflection skip/snooze state keyed by local date, with one snooze per night and empty Done treated as Skip.
+- Added editable Settings for focus category, target type/value, preferred focus hour, reflection hour, and monthly budget.
+- Fixed onboarding so the summary rows reflect live form state and bootstrap stores the selected target type.
+- Implemented category switching by creating a new active focus category, preserving old category history.

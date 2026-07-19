@@ -58,7 +58,18 @@ export default function TodayTabScreen() {
   }
 
   return (
-    <Screen headerAction={<Mascot size={52} />} subtitle="Your ranked next actions" title="Today">
+    <Screen
+      headerAction={
+        <View style={styles.headerActions}>
+          <Pressable accessibilityLabel="Open settings" accessibilityRole="button" onPress={() => router.push("/settings")} style={styles.settingsButton}>
+            <Ionicons color={colors.text} name="settings-outline" size={21} />
+          </Pressable>
+          <Mascot size={52} />
+        </View>
+      }
+      subtitle="Your ranked next actions"
+      title="Today"
+    >
       {today?.reflectionDue ? (
         <Pressable
           accessibilityRole="button"
@@ -245,6 +256,8 @@ const styles = StyleSheet.create({
     minHeight: 76,
     padding: spacing.md,
   },
+  headerActions: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
+  settingsButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   budgetAlert: { alignItems: "center", backgroundColor: colors.coralSurface, flexDirection: "row", gap: spacing.md, minHeight: 76, padding: spacing.md },
   cardStack: { gap: spacing.md },
   pendingExpense: { alignItems: "center", backgroundColor: colors.coralSurface, flexDirection: "row", gap: spacing.md, minHeight: 76, padding: spacing.md },

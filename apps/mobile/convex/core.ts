@@ -255,6 +255,7 @@ export const bootstrap = mutation({
     monthlyBudget: v.number(),
     preferredHour: v.number(),
     reflectionHour: v.number(),
+    targetType,
     targetValue: v.number(),
   },
   returns: v.null(),
@@ -265,8 +266,8 @@ export const bootstrap = mutation({
     const categoryId = await ctx.db.insert("focusCategories", {
       name: args.focusName.trim() || "Study",
       preferredHour: Math.max(0, Math.min(23, Math.round(args.preferredHour))),
-      targetType: "sessions_per_week",
-      targetValue: Math.max(1, Math.min(7, Math.round(args.targetValue))),
+      targetType: args.targetType,
+      targetValue: Math.max(1, Math.min(1000, Math.round(args.targetValue))),
     });
     await ctx.db.insert("appSettings", {
       focusCategoryId: categoryId,
@@ -412,6 +413,66 @@ export const today = query({
         (!dismissal || (dismissal.action === "snooze" && (dismissal.snoozeUntil ?? 0) <= now)),
       settings: settingsDoc,
     };
+  },
+});
+
+export const settingsView = query({
+  args: {},
+  returns: v.object({
+    focusCategories: v.array(focusCategory),
+    focusCategory: v.union(focusCategory, v.null()),
+    settings: v.union(settings, v.null()),
+  }),
+  handler: async (ctx) => {
+    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    return {
+      focusCategories: await ctx.db.query("focusCategories").take(50),
+      focusCategory: settingsDoc ? await ctx.db.get(settingsDoc.focusCategoryId) : null,
+      settings: settingsDoc,
+    };
+  },
+});
+
+export const updateSettings = mutation({
+  args: {
+    focusName: v.string(),
+    monthlyBudget: v.number(),
+    preferredHour: v.number(),
+    reflectionHour: v.number(),
+    targetType,
+    targetValue: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    if (!settingsDoc) return null;
+    const currentFocus = await ctx.db.get(settingsDoc.focusCategoryId);
+    const focusName = args.focusName.trim() || currentFocus?.name || "Focus";
+    const preferredHour = Math.max(0, Math.min(23, Math.round(args.preferredHour)));
+    const targetValue = Math.max(1, Math.min(1000, Math.round(args.targetValue)));
+    let focusCategoryId = settingsDoc.focusCategoryId;
+
+    if (!currentFocus || currentFocus.name.trim().toLowerCase() !== focusName.toLowerCase()) {
+      focusCategoryId = await ctx.db.insert("focusCategories", {
+        name: focusName,
+        preferredHour,
+        targetType: args.targetType,
+        targetValue,
+      });
+    } else {
+      await ctx.db.patch(currentFocus._id, {
+        preferredHour,
+        targetType: args.targetType,
+        targetValue,
+      });
+    }
+
+    await ctx.db.patch(settingsDoc._id, {
+      focusCategoryId,
+      monthlyBudget: Math.max(0, Math.round(args.monthlyBudget)),
+      reflectionHour: Math.max(17, Math.min(23, Math.round(args.reflectionHour))),
+    });
+    return null;
   },
 });
 
