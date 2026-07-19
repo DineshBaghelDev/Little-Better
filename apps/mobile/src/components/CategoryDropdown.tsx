@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { colors, radii, spacing } from "../theme";
 
@@ -32,36 +32,38 @@ export function CategoryDropdown({
       </Pressable>
       {open ? (
         <View style={styles.menu}>
-          {categories.map((category) => (
-            <Pressable
-              accessibilityRole="button"
-              key={category._id}
-              onPress={() => {
-                onSelect(category.name);
-                setOpen(false);
-              }}
-              style={styles.option}
-            >
-              <Text style={styles.optionText}>{category.name}</Text>
-              {selected === category.name ? <Ionicons color={colors.primaryDark} name="checkmark" size={20} /> : null}
+          <ScrollView nestedScrollEnabled style={styles.menuScroll}>
+            {categories.map((category) => (
+              <Pressable
+                accessibilityRole="button"
+                key={category._id}
+                onPress={() => {
+                  onSelect(category.name);
+                  setOpen(false);
+                }}
+                style={styles.option}
+              >
+                <Text style={styles.optionText}>{category.name}</Text>
+                {selected === category.name ? <Ionicons color={colors.primaryDark} name="checkmark" size={20} /> : null}
+              </Pressable>
+            ))}
+            <Pressable accessibilityRole="button" onPress={() => setManaging((value) => !value)} style={styles.manageToggle}>
+              <Ionicons color={colors.coral} name={managing ? "close" : "trash-outline"} size={18} />
+              <Text style={styles.manageText}>{managing ? "Done managing" : "Manage categories"}</Text>
             </Pressable>
-          ))}
-          <Pressable accessibilityRole="button" onPress={() => setManaging((value) => !value)} style={styles.manageToggle}>
-            <Ionicons color={colors.coral} name={managing ? "close" : "trash-outline"} size={18} />
-            <Text style={styles.manageText}>{managing ? "Done managing" : "Manage categories"}</Text>
-          </Pressable>
-          {managing ? (
-            <View style={styles.manageList}>
-              {categories.map((category) => (
-                <View key={`manage-${category._id}`} style={styles.manageRow}>
-                  <Text style={styles.optionText}>{category.name}</Text>
-                  <Pressable accessibilityLabel={`Delete ${category.name} category`} accessibilityRole="button" onPress={() => onDelete(category._id)} style={styles.deleteButton}>
-                    <Ionicons color={colors.coral} name="trash-outline" size={20} />
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          ) : null}
+            {managing ? (
+              <View style={styles.manageList}>
+                {categories.map((category) => (
+                  <View key={`manage-${category._id}`} style={styles.manageRow}>
+                    <Text style={styles.optionText}>{category.name}</Text>
+                    <Pressable accessibilityLabel={`Delete ${category.name} category`} accessibilityRole="button" onPress={() => onDelete(category._id)} style={styles.deleteButton}>
+                      <Ionicons color={colors.coral} name="trash-outline" size={20} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </ScrollView>
         </View>
       ) : null}
     </View>
@@ -91,7 +93,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     elevation: 8,
     left: 0,
-    maxHeight: 360,
     overflow: "hidden",
     position: "absolute",
     right: 0,
@@ -102,6 +103,7 @@ const styles = StyleSheet.create({
     top: 60,
     zIndex: 30,
   },
+  menuScroll: { maxHeight: 420 },
   option: {
     alignItems: "center",
     borderBottomColor: colors.border,
