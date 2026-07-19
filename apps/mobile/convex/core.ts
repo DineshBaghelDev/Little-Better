@@ -547,6 +547,15 @@ export const updateTransaction = mutation({
   },
 });
 
+export const removeTransaction = mutation({
+  args: { transactionId: v.id("transactions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.transactionId);
+    return null;
+  },
+});
+
 export const addAccount = mutation({
   args: { balance: v.number(), name: v.string() },
   returns: v.null(),
