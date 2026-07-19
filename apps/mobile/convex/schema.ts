@@ -3,6 +3,9 @@ import { v } from "convex/values";
 
 export default defineSchema({
   tasks: defineTable({
+    location: v.optional(v.string()),
+    meetingLink: v.optional(v.string()),
+    note: v.optional(v.string()),
     title: v.string(),
     status: v.union(v.literal("planned"), v.literal("done")),
     scheduledAt: v.optional(v.number()),
@@ -29,6 +32,8 @@ export default defineSchema({
   transactions: defineTable({
     amount: v.number(),
     category: v.string(),
+    merchant: v.optional(v.string()),
+    note: v.optional(v.string()),
     occurredAt: v.number(),
     status: v.union(
       v.literal("pending"),
