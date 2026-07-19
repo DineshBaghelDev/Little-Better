@@ -20,3 +20,4 @@
 - Fixed onboarding so the summary rows reflect live form state and bootstrap stores the selected target type.
 - Implemented category switching by creating a new active focus category, preserving old category history.
 - Reworked Calendar to use an anchored week with back/forward navigation, collapsed creation, tappable scheduled-task actions, explicit unscheduled-task time selection, and focus-session times.
+- Added Expo Notifications using SDK 57 docs, a persisted reminders toggle, local scheduling for upcoming tasks/focus/reflection/pending expense/weekly insight, and notification-response deep links via Expo Router.
