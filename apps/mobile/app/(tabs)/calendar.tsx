@@ -10,6 +10,11 @@ import { colors, spacing } from "../../src/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+function timeOnDay(dayStart: number, value: string) {
+  const [hours = "9", minutes = "0"] = value.split(":");
+  return dayStart + (Number(hours) || 9) * 60 * 60 * 1000 + (Number(minutes) || 0) * 60 * 1000;
+}
+
 export default function CalendarScreen() {
   const today = useMemo(() => {
     const date = new Date();
@@ -24,7 +29,13 @@ export default function CalendarScreen() {
   const addTask = useMutation(api.core.addTask);
   const scheduleTask = useMutation(api.core.scheduleTask);
   const [selectedDay, setSelectedDay] = useState(0);
-  const [title, setTitle] = useState("");
+  const [taskForm, setTaskForm] = useState({
+    location: "",
+    meetingLink: "",
+    note: "",
+    time: "09:00",
+    title: "",
+  });
   const selectedDate = days[selectedDay];
   const dayStart = selectedDate.getTime();
   const dayEnd = dayStart + DAY_MS;
@@ -32,10 +43,16 @@ export default function CalendarScreen() {
   const sessions = calendar?.focusSessions.filter((session) => session.completedAt >= dayStart && session.completedAt < dayEnd) ?? [];
 
   async function addToDay() {
-    const trimmed = title.trim();
+    const trimmed = taskForm.title.trim();
     if (!trimmed) return;
-    await addTask({ scheduledAt: dayStart + 9 * 60 * 60 * 1000, title: trimmed });
-    setTitle("");
+    await addTask({
+      location: taskForm.location,
+      meetingLink: taskForm.meetingLink,
+      note: taskForm.note,
+      scheduledAt: timeOnDay(dayStart, taskForm.time),
+      title: trimmed,
+    });
+    setTaskForm({ location: "", meetingLink: "", note: "", time: taskForm.time, title: "" });
   }
 
   return (
@@ -69,6 +86,9 @@ export default function CalendarScreen() {
             <View style={styles.eventCopy}>
               <Text style={styles.eventTitle}>{task.title}</Text>
               <Text style={styles.eventTime}>{new Date(task.scheduledAt ?? dayStart).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</Text>
+              {task.location ? <Text style={styles.eventTime}>{task.location}</Text> : null}
+              {task.meetingLink ? <Text style={styles.eventTime}>{task.meetingLink}</Text> : null}
+              {task.note ? <Text style={styles.eventTime}>{task.note}</Text> : null}
             </View>
           </Surface>
         ))}
@@ -92,11 +112,44 @@ export default function CalendarScreen() {
       <Surface style={styles.quickAdd}>
         <TextInput
           accessibilityLabel="New scheduled task"
-          onChangeText={setTitle}
-          placeholder="Add task at 9 AM"
+          onChangeText={(title) => setTaskForm((current) => ({ ...current, title }))}
+          placeholder="Task title"
           placeholderTextColor={colors.muted}
           style={styles.input}
-          value={title}
+          value={taskForm.title}
+        />
+        <TextInput
+          accessibilityLabel="Task time"
+          onChangeText={(time) => setTaskForm((current) => ({ ...current, time }))}
+          placeholder="Time, e.g. 14:30"
+          placeholderTextColor={colors.muted}
+          style={styles.input}
+          value={taskForm.time}
+        />
+        <TextInput
+          accessibilityLabel="Task location"
+          onChangeText={(location) => setTaskForm((current) => ({ ...current, location }))}
+          placeholder="Location (optional)"
+          placeholderTextColor={colors.muted}
+          style={styles.input}
+          value={taskForm.location}
+        />
+        <TextInput
+          accessibilityLabel="Meeting link"
+          autoCapitalize="none"
+          onChangeText={(meetingLink) => setTaskForm((current) => ({ ...current, meetingLink }))}
+          placeholder="Meeting link (optional)"
+          placeholderTextColor={colors.muted}
+          style={styles.input}
+          value={taskForm.meetingLink}
+        />
+        <TextInput
+          accessibilityLabel="Task note"
+          onChangeText={(note) => setTaskForm((current) => ({ ...current, note }))}
+          placeholder="Notes (optional)"
+          placeholderTextColor={colors.muted}
+          style={styles.input}
+          value={taskForm.note}
         />
         <PrimaryButton label="Add" onPress={addToDay} />
       </Surface>
@@ -107,12 +160,13 @@ export default function CalendarScreen() {
           <Pressable
             accessibilityRole="button"
             key={task._id}
-            onPress={() => scheduleTask({ scheduledAt: dayStart + 9 * 60 * 60 * 1000, taskId: task._id })}
+            onPress={() => scheduleTask({ scheduledAt: timeOnDay(dayStart, taskForm.time), taskId: task._id })}
             style={styles.unscheduled}
           >
             <View style={styles.eventCopy}>
               <Text style={styles.eventTitle}>{task.title}</Text>
-              <Text style={styles.eventTime}>Tap to schedule at 9 AM</Text>
+              <Text style={styles.eventTime}>Tap to schedule at {taskForm.time}</Text>
+              {task.note ? <Text style={styles.eventTime}>{task.note}</Text> : null}
             </View>
             <Ionicons color={colors.primaryDark} name="calendar-outline" size={21} />
           </Pressable>
