@@ -46,7 +46,10 @@ export default function TodayTabScreen() {
           <Ionicons color={colors.coral} name="receipt-outline" size={22} />
           <View style={styles.grow}>
             <Text style={styles.cardTitle}>{transaction.category}</Text>
-            <Text style={styles.meta}>Pending expense · Rs {transaction.amount.toLocaleString("en-IN")}</Text>
+            <Text style={styles.meta}>
+              Pending {transaction.type ?? "expense"} · {transaction.paymentMethod ?? "online"} · Rs {transaction.amount.toLocaleString("en-IN")}
+            </Text>
+            {transaction.merchant ? <Text style={styles.meta}>{transaction.merchant}</Text> : null}
           </View>
           <Pressable
             accessibilityLabel={`Confirm ${transaction.category} expense`}

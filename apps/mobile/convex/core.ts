@@ -35,12 +35,30 @@ const task = v.object({
 const transaction = v.object({
   _id: v.id("transactions"),
   _creationTime: v.number(),
+  accountId: v.optional(v.id("accounts")),
   amount: v.number(),
   category: v.string(),
   merchant: v.optional(v.string()),
   note: v.optional(v.string()),
   occurredAt: v.number(),
+  paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("online"))),
   status: v.union(v.literal("pending"), v.literal("confirmed"), v.literal("ignored")),
+  type: v.optional(v.union(v.literal("expense"), v.literal("income"))),
+});
+
+const account = v.object({
+  _id: v.id("accounts"),
+  _creationTime: v.number(),
+  archived: v.optional(v.boolean()),
+  balance: v.number(),
+  name: v.string(),
+});
+
+const transactionCategory = v.object({
+  _id: v.id("transactionCategories"),
+  _creationTime: v.number(),
+  name: v.string(),
+  type: v.union(v.literal("expense"), v.literal("income")),
 });
 
 const activeTimer = v.object({
@@ -74,6 +92,10 @@ async function firstActiveTimer(ctx: QueryCtx | MutationCtx) {
       .order("desc")
       .first())
   );
+}
+
+async function firstAccount(ctx: QueryCtx | MutationCtx) {
+  return (await ctx.db.query("accounts").take(1))[0] ?? null;
 }
 
 export const onboardingStatus = query({
@@ -324,24 +346,53 @@ export const addManualFocus = mutation({
   },
 });
 
+export const ensureMoneyDefaults = mutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    if (!(await firstAccount(ctx))) {
+      await ctx.db.insert("accounts", { balance: 0, name: "Wallet" });
+    }
+    const existingExpenses = await ctx.db
+      .query("transactionCategories")
+      .withIndex("by_type", (q) => q.eq("type", "expense"))
+      .take(1);
+    if (!existingExpenses.length) {
+      for (const name of ["Food", "Bills", "Travel", "Shopping"]) {
+        await ctx.db.insert("transactionCategories", { name, type: "expense" });
+      }
+      await ctx.db.insert("transactionCategories", { name: "Salary", type: "income" });
+    }
+    return null;
+  },
+});
+
 export const addExpense = mutation({
   args: {
+    accountId: v.optional(v.id("accounts")),
     amount: v.number(),
     category: v.string(),
     merchant: v.optional(v.string()),
     note: v.optional(v.string()),
     occurredAt: v.optional(v.number()),
+    paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("online"))),
+    status: v.optional(v.union(v.literal("pending"), v.literal("confirmed"))),
+    type: v.optional(v.union(v.literal("expense"), v.literal("income"))),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     if (!Number.isFinite(args.amount) || args.amount <= 0) return null;
+    const fallbackAccount = args.accountId ? null : await firstAccount(ctx);
     await ctx.db.insert("transactions", {
+      accountId: args.accountId ?? fallbackAccount?._id,
       amount: Math.round(args.amount),
       category: args.category.trim() || "General",
       merchant: args.merchant?.trim() || undefined,
       note: args.note?.trim() || undefined,
       occurredAt: args.occurredAt ?? Date.now(),
-      status: "pending",
+      paymentMethod: args.paymentMethod ?? "online",
+      status: args.status ?? "pending",
+      type: args.type ?? "expense",
     });
     return null;
   },
@@ -392,19 +443,24 @@ export const calendar = query({
 });
 
 export const money = query({
-  args: {},
+  args: { accountId: v.optional(v.id("accounts")) },
   returns: v.object({
+    accounts: v.array(account),
     budget: v.number(),
+    categories: v.array(transactionCategory),
     confirmed: v.array(transaction),
+    netWorth: v.number(),
     pending: v.array(transaction),
     spent: v.number(),
-    summary: v.array(v.object({ amount: v.number(), category: v.string() })),
+    summary: v.array(v.object({ amount: v.number(), category: v.string(), type: v.union(v.literal("expense"), v.literal("income")) })),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
     const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    const accounts = (await ctx.db.query("accounts").take(50)).filter((item) => !item.archived);
+    const fallbackAccountId = accounts[0]?._id;
     const confirmed = await ctx.db
       .query("transactions")
       .withIndex("by_status_and_occurredAt", (q) =>
@@ -417,46 +473,116 @@ export const money = query({
       .withIndex("by_status", (q) => q.eq("status", "pending"))
       .order("desc")
       .take(20);
-    const byCategory = new Map<string, number>();
-    for (const item of confirmed) byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + item.amount);
+    const visibleConfirmed = args.accountId
+      ? confirmed.filter((item) => (item.accountId ?? fallbackAccountId) === args.accountId)
+      : confirmed;
+    const visiblePending = args.accountId
+      ? pending.filter((item) => (item.accountId ?? fallbackAccountId) === args.accountId)
+      : pending;
+    const byCategory = new Map<string, { amount: number; type: "expense" | "income" }>();
+    for (const item of visibleConfirmed) {
+      const type = item.type ?? "expense";
+      const current = byCategory.get(item.category) ?? { amount: 0, type };
+      byCategory.set(item.category, { amount: current.amount + item.amount, type });
+    }
+    const accountTotals = new Map(accounts.map((item) => [item._id, item.balance]));
+    for (const item of confirmed) {
+      const accountId = item.accountId ?? fallbackAccountId;
+      if (!accountId) continue;
+      const signedAmount = (item.type ?? "expense") === "income" ? item.amount : -item.amount;
+      accountTotals.set(accountId, (accountTotals.get(accountId) ?? 0) + signedAmount);
+    }
 
     return {
+      accounts: accounts.map((item) => ({ ...item, balance: accountTotals.get(item._id) ?? item.balance })),
       budget: settingsDoc?.monthlyBudget ?? 0,
-      confirmed,
-      pending,
-      spent: confirmed.reduce((total, item) => total + item.amount, 0),
-      summary: [...byCategory.entries()].map(([category, amount]) => ({ amount, category })),
+      categories: await ctx.db.query("transactionCategories").take(50),
+      confirmed: visibleConfirmed,
+      netWorth: [...accountTotals.values()].reduce((total, value) => total + value, 0),
+      pending: visiblePending,
+      spent: visibleConfirmed.reduce((total, item) => total + ((item.type ?? "expense") === "expense" ? item.amount : 0), 0),
+      summary: [...byCategory.entries()].map(([category, item]) => ({ amount: item.amount, category, type: item.type })),
     };
   },
 });
 
 export const updateTransaction = mutation({
   args: {
+    accountId: v.optional(v.id("accounts")),
     amount: v.optional(v.number()),
     category: v.optional(v.string()),
     merchant: v.optional(v.string()),
     note: v.optional(v.string()),
     occurredAt: v.optional(v.number()),
+    paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("online"))),
     status: v.optional(v.union(v.literal("pending"), v.literal("confirmed"), v.literal("ignored"))),
     transactionId: v.id("transactions"),
+    type: v.optional(v.union(v.literal("expense"), v.literal("income"))),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const patch: Partial<{
+      accountId: typeof args.accountId;
       amount: number;
       category: string;
       merchant: string;
       note: string;
       occurredAt: number;
+      paymentMethod: "cash" | "online";
       status: "pending" | "confirmed" | "ignored";
+      type: "expense" | "income";
     }> = {};
+    if (args.accountId !== undefined) patch.accountId = args.accountId;
     if (args.amount !== undefined && Number.isFinite(args.amount) && args.amount > 0) patch.amount = Math.round(args.amount);
     if (args.category !== undefined && args.category.trim()) patch.category = args.category.trim();
     if (args.merchant !== undefined) patch.merchant = args.merchant.trim();
     if (args.note !== undefined) patch.note = args.note.trim();
     if (args.occurredAt !== undefined && Number.isFinite(args.occurredAt)) patch.occurredAt = args.occurredAt;
+    if (args.paymentMethod !== undefined) patch.paymentMethod = args.paymentMethod;
     if (args.status !== undefined) patch.status = args.status;
+    if (args.type !== undefined) patch.type = args.type;
     if (Object.keys(patch).length) await ctx.db.patch(args.transactionId, patch);
+    return null;
+  },
+});
+
+export const addAccount = mutation({
+  args: { balance: v.number(), name: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const name = args.name.trim();
+    if (name && Number.isFinite(args.balance)) await ctx.db.insert("accounts", { balance: Math.round(args.balance), name });
+    return null;
+  },
+});
+
+export const updateAccount = mutation({
+  args: { accountId: v.id("accounts"), balance: v.optional(v.number()), name: v.optional(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const patch: Partial<{ balance: number; name: string }> = {};
+    if (args.balance !== undefined && Number.isFinite(args.balance)) patch.balance = Math.round(args.balance);
+    if (args.name !== undefined && args.name.trim()) patch.name = args.name.trim();
+    if (Object.keys(patch).length) await ctx.db.patch(args.accountId, patch);
+    return null;
+  },
+});
+
+export const archiveAccount = mutation({
+  args: { accountId: v.id("accounts") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.accountId, { archived: true });
+    return null;
+  },
+});
+
+export const addCategory = mutation({
+  args: { name: v.string(), type: v.union(v.literal("expense"), v.literal("income")) },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const name = args.name.trim();
+    if (name) await ctx.db.insert("transactionCategories", { name, type: args.type });
     return null;
   },
 });
