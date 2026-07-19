@@ -6,7 +6,6 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { api } from "../../convex/_generated/api";
 import { Doc, Id } from "../../convex/_generated/dataModel";
 import { CategoryDropdown } from "../../src/components/CategoryDropdown";
-import { ChoiceDropdown } from "../../src/components/ChoiceDropdown";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
 import { SectionLabel, Surface } from "../../src/components/ui";
@@ -15,14 +14,6 @@ import { colors, radii, spacing } from "../../src/theme";
 type TransactionType = "expense" | "income";
 type PaymentMethod = "cash" | "online";
 
-const transactionTypeOptions = [
-  { label: "Expense", value: "expense" },
-  { label: "Income", value: "income" },
-] satisfies { label: string; value: TransactionType }[];
-const paymentOptions = [
-  { label: "Online", value: "online" },
-  { label: "Cash", value: "cash" },
-] satisfies { label: string; value: PaymentMethod }[];
 const statusOptions = [
   { label: "Confirmed", value: "confirmed" },
   { label: "Pending", value: "pending" },
@@ -124,9 +115,19 @@ export default function MoneyScreen() {
   function transactionFields(showStatus = false) {
     return (
       <>
-        <ChoiceDropdown label="Type" onSelect={setType} options={transactionTypeOptions} value={expense.type} />
-        <ChoiceDropdown label="Payment" onSelect={(paymentMethod) => setExpense((current) => ({ ...current, paymentMethod }))} options={paymentOptions} value={expense.paymentMethod} />
-        {showStatus ? <ChoiceDropdown label="Status" onSelect={(status) => setExpense((current) => ({ ...current, status }))} options={statusOptions} value={expense.status} /> : null}
+        <View style={styles.chips}>
+          <Chip label="Expense" selected={expense.type === "expense"} onPress={() => setType("expense")} />
+          <Chip label="Income" selected={expense.type === "income"} onPress={() => setType("income")} />
+          <Chip label="Online" selected={expense.paymentMethod === "online"} onPress={() => setExpense((current) => ({ ...current, paymentMethod: "online" }))} />
+          <Chip label="Cash" selected={expense.paymentMethod === "cash"} onPress={() => setExpense((current) => ({ ...current, paymentMethod: "cash" }))} />
+        </View>
+        {showStatus ? (
+          <View style={styles.chips}>
+            {statusOptions.map((option) => (
+              <Chip key={option.value} label={option.label} selected={expense.status === option.value} onPress={() => setExpense((current) => ({ ...current, status: option.value }))} />
+            ))}
+          </View>
+        ) : null}
         <TextInput accessibilityLabel="Amount" keyboardType="decimal-pad" onChangeText={(amount) => setExpense((current) => ({ ...current, amount }))} placeholder="Amount" placeholderTextColor={colors.muted} style={styles.input} value={expense.amount} />
         <TextInput accessibilityLabel="Merchant or payer" onChangeText={(merchant) => setExpense((current) => ({ ...current, merchant }))} placeholder={expense.type === "income" ? "Payer (optional)" : "Merchant (optional)"} placeholderTextColor={colors.muted} style={styles.input} value={expense.merchant} />
         <CategoryDropdown
