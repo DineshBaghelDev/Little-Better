@@ -30,19 +30,31 @@ export default defineSchema({
     source: v.union(v.literal("timer"), v.literal("manual")),
   }).index("by_category", ["categoryId"]),
   transactions: defineTable({
+    accountId: v.optional(v.id("accounts")),
     amount: v.number(),
     category: v.string(),
     merchant: v.optional(v.string()),
     note: v.optional(v.string()),
     occurredAt: v.number(),
+    paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("online"))),
     status: v.union(
       v.literal("pending"),
       v.literal("confirmed"),
       v.literal("ignored"),
     ),
+    type: v.optional(v.union(v.literal("expense"), v.literal("income"))),
   })
     .index("by_status", ["status"])
     .index("by_status_and_occurredAt", ["status", "occurredAt"]),
+  accounts: defineTable({
+    archived: v.optional(v.boolean()),
+    balance: v.number(),
+    name: v.string(),
+  }),
+  transactionCategories: defineTable({
+    name: v.string(),
+    type: v.union(v.literal("expense"), v.literal("income")),
+  }).index("by_type", ["type"]),
   reflections: defineTable({
     note: v.optional(v.string()),
     reflectedAt: v.number(),
