@@ -213,7 +213,7 @@ function Stat({ color, detail, label, value }: { color: string; detail: string; 
   return (
     <View style={[styles.stat, { backgroundColor: color }]}>
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
+      <Text adjustsFontSizeToFit numberOfLines={1} style={styles.statValue}>{value}</Text>
       <Text style={styles.meta}>{detail}</Text>
     </View>
   );

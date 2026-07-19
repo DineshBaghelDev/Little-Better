@@ -189,7 +189,7 @@ export default function TodayTabScreen() {
 
       {!today?.rankedItems.length && !today?.laterToday.length ? (
         <Surface style={styles.empty}>
-          <Mascot size={72} />
+          <Mascot size={72} variant="complete" />
           <View style={styles.grow}>
             <Text style={styles.cardTitle}>Nothing needs ranking</Text>
             <Text style={styles.meta}>Add one planned task when you want Today to guide you.</Text>

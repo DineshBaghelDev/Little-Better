@@ -28,3 +28,12 @@ export const radii = {
   card: 18,
   pill: 999,
 };
+
+export const typography = {
+  display: { fontSize: 30, fontWeight: "700" as const, lineHeight: 36 },
+  screenTitle: { fontSize: 24, fontWeight: "700" as const, lineHeight: 30 },
+  cardTitle: { fontSize: 16, fontWeight: "700" as const, lineHeight: 21 },
+  body: { fontSize: 15, lineHeight: 22 },
+  secondary: { fontSize: 12, lineHeight: 17 },
+  micro: { fontSize: 11, lineHeight: 14 },
+};
