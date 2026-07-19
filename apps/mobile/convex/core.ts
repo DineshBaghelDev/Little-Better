@@ -1,9 +1,10 @@
 import { v } from "convex/values";
 
+import type { Doc } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
-const SESSION_SECONDS = 30 * 60;
+const DAY_MS = 24 * MS_PER_HOUR;
 
 const targetType = v.union(
   v.literal("sessions_per_week"),
@@ -83,6 +84,71 @@ const settings = v.object({
 
 const weeklyInsightStatus = v.union(v.literal("new"), v.literal("applied"), v.literal("dismissed"));
 
+const todayTaskTone = v.union(v.literal("normal"), v.literal("warning"));
+
+const todayItem = v.union(
+  v.object({
+    kind: v.literal("timer"),
+    rank: v.number(),
+    reason: v.string(),
+    timer: activeTimer,
+  }),
+  v.object({
+    kind: v.literal("task"),
+    rank: v.number(),
+    reason: v.string(),
+    task,
+    tone: todayTaskTone,
+  }),
+  v.object({
+    kind: v.literal("focus"),
+    progressLabel: v.string(),
+    rank: v.number(),
+    reason: v.string(),
+  }),
+);
+
+function startOfDay(value: number) {
+  const day = new Date(value);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
+}
+
+function startOfWeek(value: number) {
+  const day = new Date(startOfDay(value));
+  const daysSinceMonday = (day.getDay() + 6) % 7;
+  day.setDate(day.getDate() - daysSinceMonday);
+  return day.getTime();
+}
+
+function minutesUntil(from: number, to: number) {
+  return Math.max(1, Math.ceil((to - from) / (60 * 1000)));
+}
+
+function focusProgressLabel(
+  focus: Doc<"focusCategories">,
+  sessions: { completedAt: number; durationMinutes: number }[],
+  now: number,
+) {
+  const target = Math.max(1, focus.targetValue ?? (focus.targetType === "sessions_per_week" ? 3 : 1));
+  if (focus.targetType === "minutes_per_day") {
+    const todayStart = startOfDay(now);
+    const minutes = sessions
+      .filter((session) => session.completedAt >= todayStart)
+      .reduce((total, session) => total + session.durationMinutes, 0);
+    return { complete: minutes >= target, label: `${minutes} of ${target} minutes today` };
+  }
+  if (focus.targetType === "minutes_per_week") {
+    const minutes = sessions.reduce((total, session) => total + session.durationMinutes, 0);
+    return { complete: minutes >= target, label: `${minutes} of ${target} minutes this week` };
+  }
+  if (focus.targetType === "binary_days") {
+    const days = new Set(sessions.map((session) => startOfDay(session.completedAt)));
+    return { complete: days.size >= target, label: `${days.size} of ${target} days this week` };
+  }
+  return { complete: sessions.length >= target, label: `${sessions.length} of ${target} sessions this week` };
+}
+
 async function firstActiveTimer(ctx: QueryCtx | MutationCtx) {
   return (
     (await ctx.db
@@ -148,49 +214,123 @@ export const today = query({
   args: {},
   returns: v.object({
     activeTimer: v.union(activeTimer, v.null()),
+    budgetAlert: v.union(
+      v.object({
+        budget: v.number(),
+        overBy: v.number(),
+        spent: v.number(),
+      }),
+      v.null(),
+    ),
     focusCategory: v.union(focusCategory, v.null()),
+    focusProgressLabel: v.string(),
     focusSessionsThisWeek: v.number(),
-    plannedTasks: v.array(task),
+    laterToday: v.array(v.object({ reason: v.string(), task })),
     pendingTransactions: v.array(transaction),
+    rankedItems: v.array(todayItem),
     reflectionDue: v.boolean(),
     settings: v.union(settings, v.null()),
   }),
   handler: async (ctx) => {
     const now = Date.now();
+    const dayStart = startOfDay(now);
+    const dayEnd = dayStart + DAY_MS;
+    const weekStart = startOfWeek(now);
     const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
     const focus = settingsDoc ? await ctx.db.get(settingsDoc.focusCategoryId) : null;
-    const plannedTasks = await ctx.db
+    const overdueTasks = await ctx.db
       .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", "planned"))
+      .withIndex("by_status_and_scheduledAt", (q) =>
+        q.eq("status", "planned").lt("scheduledAt", now),
+      )
+      .order("desc")
       .take(20);
+    const todayTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status_and_scheduledAt", (q) =>
+        q.eq("status", "planned").gte("scheduledAt", now).lt("scheduledAt", dayEnd),
+      )
+      .take(50);
     const pendingTransactions = await ctx.db
       .query("transactions")
       .withIndex("by_status", (q) => q.eq("status", "pending"))
       .order("desc")
       .take(3);
     const [lastReflection] = await ctx.db.query("reflections").order("desc").take(1);
-    const dayStart = new Date(now);
-    dayStart.setHours(0, 0, 0, 0);
-    const weekStart = now - 7 * 24 * MS_PER_HOUR;
     const focusSessions = focus
       ? await ctx.db
           .query("focusSessions")
-          .withIndex("by_category", (q) => q.eq("categoryId", focus._id))
-          .order("desc")
-          .take(20)
+          .withIndex("by_category_and_completedAt", (q) =>
+            q.eq("categoryId", focus._id).gte("completedAt", weekStart).lte("completedAt", now),
+          )
+          .take(200)
       : [];
+    const monthStart = new Date(now);
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const monthEnd = new Date(monthStart);
+    monthEnd.setMonth(monthEnd.getMonth() + 1);
+    const confirmedThisMonth = await ctx.db
+      .query("transactions")
+      .withIndex("by_status_and_occurredAt", (q) =>
+        q.eq("status", "confirmed").gte("occurredAt", monthStart.getTime()).lt("occurredAt", monthEnd.getTime()),
+      )
+      .take(200);
+    const spent = confirmedThisMonth.reduce(
+      (total, item) => total + ((item.type ?? "expense") === "expense" ? item.amount : 0),
+      0,
+    );
+    const timer = await firstActiveTimer(ctx);
+    const progress = focus ? focusProgressLabel(focus, focusSessions, now) : { complete: true, label: "" };
+    const rankedItems: Array<
+      | { kind: "timer"; rank: number; reason: string; timer: NonNullable<typeof timer> }
+      | { kind: "task"; rank: number; reason: string; task: (typeof todayTasks)[number]; tone: "normal" | "warning" }
+      | { kind: "focus"; progressLabel: string; rank: number; reason: string }
+    > = [];
+    const usedTaskIds = new Set<string>();
+    const pushTask = (taskDoc: (typeof todayTasks)[number], reason: string, tone: "normal" | "warning") => {
+      if (rankedItems.length >= 3 || usedTaskIds.has(taskDoc._id)) return;
+      usedTaskIds.add(taskDoc._id);
+      rankedItems.push({ kind: "task", rank: rankedItems.length + 1, reason, task: taskDoc, tone });
+    };
+
+    if (timer) rankedItems.push({ kind: "timer", rank: 1, reason: "Active now", timer });
+    const overdue = overdueTasks[0];
+    if (overdue) pushTask(overdue, "Overdue", "warning");
+    const soon = todayTasks.find((item) => (item.scheduledAt ?? dayEnd) <= now + MS_PER_HOUR);
+    if (soon) pushTask(soon, `Starts in ${minutesUntil(now, soon.scheduledAt ?? now)} min`, "normal");
+    const preferredHour = focus?.preferredHour ?? 9;
+    const focusIsDue = new Date(now).getHours() >= preferredHour;
+    if (focus && focusIsDue && !progress.complete && rankedItems.length < 3) {
+      rankedItems.push({
+        kind: "focus",
+        progressLabel: progress.label,
+        rank: rankedItems.length + 1,
+        reason: "Target due",
+      });
+    }
+    const next = todayTasks.find((item) => !usedTaskIds.has(item._id));
+    if (next) pushTask(next, "Next up", "normal");
+    const laterToday = todayTasks
+      .filter((item) => !usedTaskIds.has(item._id))
+      .map((item) => ({ reason: item.scheduledAt && item.scheduledAt <= now + MS_PER_HOUR ? `Starts in ${minutesUntil(now, item.scheduledAt)} min` : "Later today", task: item }));
 
     return {
-      activeTimer: await firstActiveTimer(ctx),
+      activeTimer: timer,
+      budgetAlert:
+        settingsDoc && settingsDoc.monthlyBudget > 0 && spent > settingsDoc.monthlyBudget
+          ? { budget: settingsDoc.monthlyBudget, overBy: spent - settingsDoc.monthlyBudget, spent }
+          : null,
       focusCategory: focus,
-      focusSessionsThisWeek: focusSessions.filter((session) => session.completedAt >= weekStart)
-        .length,
+      focusProgressLabel: progress.label,
+      focusSessionsThisWeek: focusSessions.length,
+      laterToday,
       pendingTransactions,
-      plannedTasks: plannedTasks.sort((a, b) => (a.scheduledAt ?? now) - (b.scheduledAt ?? now)),
+      rankedItems,
       reflectionDue:
         !!settingsDoc &&
         new Date(now).getHours() >= settingsDoc.reflectionHour &&
-        (!lastReflection || lastReflection.reflectedAt < dayStart.getTime()),
+        (!lastReflection || lastReflection.reflectedAt < dayStart),
       settings: settingsDoc,
     };
   },
@@ -201,6 +341,15 @@ export const completeTask = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.taskId, { completedAt: Date.now(), status: "done" });
+    return null;
+  },
+});
+
+export const undoCompleteTask = mutation({
+  args: { taskId: v.id("tasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.taskId, { completedAt: undefined, status: "planned" });
     return null;
   },
 });
