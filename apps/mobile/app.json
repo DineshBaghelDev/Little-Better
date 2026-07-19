@@ -8,7 +8,14 @@
     "userInterfaceStyle": "light",
     "scheme": "littlebetter",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "color": "#6D8B6A",
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true

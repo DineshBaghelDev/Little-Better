@@ -24,6 +24,7 @@ export default function SettingsScreen() {
   const [form, setForm] = useState({
     focusName: "",
     monthlyBudget: "",
+    notificationsEnabled: false,
     preferredHour: "",
     reflectionHour: "",
     targetType: "sessions_per_week" as TargetType,
@@ -35,6 +36,7 @@ export default function SettingsScreen() {
     setForm({
       focusName: settings.focusCategory.name,
       monthlyBudget: String(settings.settings.monthlyBudget),
+      notificationsEnabled: settings.settings.notificationsEnabled ?? false,
       preferredHour: String(settings.focusCategory.preferredHour ?? 9),
       reflectionHour: String(settings.settings.reflectionHour),
       targetType: settings.focusCategory.targetType,
@@ -46,6 +48,7 @@ export default function SettingsScreen() {
     await updateSettings({
       focusName: form.focusName,
       monthlyBudget: Number(form.monthlyBudget) || 0,
+      notificationsEnabled: form.notificationsEnabled,
       preferredHour: Number(form.preferredHour) || 9,
       reflectionHour: Number(form.reflectionHour) || 20,
       targetType: form.targetType,
@@ -79,9 +82,22 @@ export default function SettingsScreen() {
       </Surface>
 
       <SectionLabel>Notification controls</SectionLabel>
-      <Surface style={styles.notice}>
-        <Text style={styles.title}>Manual fallback active</Text>
-        <Text style={styles.meta}>The app works without notification access. Push controls are added with the notification scheduler.</Text>
+      <Surface>
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: form.notificationsEnabled }}
+          onPress={() => setForm((current) => ({ ...current, notificationsEnabled: !current.notificationsEnabled }))}
+          style={styles.toggleRow}
+        >
+          <View style={styles.grow}>
+            <Text style={styles.title}>Reminders</Text>
+            <Text style={styles.meta}>Tasks, focus, reflection, pending expenses, and weekly insights.</Text>
+          </View>
+          <Ionicons color={form.notificationsEnabled ? colors.primaryDark : colors.muted} name={form.notificationsEnabled ? "toggle" : "toggle-outline"} size={32} />
+        </Pressable>
+        <View style={styles.notice}>
+          <Text style={styles.meta}>If permission is denied, Today, Money, and Progress remain the manual fallback.</Text>
+        </View>
       </Surface>
 
       <SectionLabel>Focus history</SectionLabel>
@@ -120,6 +136,7 @@ const styles = StyleSheet.create({
   chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   chipTextSelected: { color: colors.surface },
   notice: { gap: spacing.xs, padding: spacing.md },
+  toggleRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 72, padding: spacing.md },
   row: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 64, paddingHorizontal: spacing.md },
   grow: { flex: 1 },
   title: { color: colors.text, fontSize: 15, fontWeight: "700" },
