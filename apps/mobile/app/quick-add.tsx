@@ -23,7 +23,15 @@ export default function QuickAddModal() {
   const addManualFocus = useMutation(api.core.addManualFocus);
   const startFocus = useMutation(api.core.startFocus);
   const [selected, setSelected] = useState<string | null>(null);
+  const [expense, setExpense] = useState({ amount: "", category: "", date: "", merchant: "", note: "" });
+  const [task, setTask] = useState({ location: "", meetingLink: "", note: "", title: "" });
   const [value, setValue] = useState("");
+
+  function expenseDate() {
+    if (!expense.date.trim()) return undefined;
+    const parsed = new Date(expense.date);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed.getTime();
+  }
 
   async function save() {
     const text = value.trim();
@@ -33,13 +41,25 @@ export default function QuickAddModal() {
       router.back();
       return;
     }
-    if (!text) return;
     if (selected === "Expense") {
+      if (!expense.amount.trim()) return;
       await addExpense({
-        amount: Number(text.replace(/[^0-9.]/g, "")),
-        category: text.replace(/[0-9.]/g, "").trim() || "General",
+        amount: Number(expense.amount),
+        category: expense.category || "General",
+        merchant: expense.merchant,
+        note: expense.note,
+        occurredAt: expenseDate(),
+      });
+    } else if (selected === "Task") {
+      if (!task.title.trim()) return;
+      await addTask({
+        location: task.location,
+        meetingLink: task.meetingLink,
+        note: task.note,
+        title: task.title,
       });
     } else {
+      if (!text) return;
       await addTask({ title: text });
     }
     router.back();
@@ -63,16 +83,100 @@ export default function QuickAddModal() {
         {selected ? (
           <View style={styles.confirmation}>
             <Text style={styles.selectedLabel}>{selected}</Text>
-            <TextInput
-              accessibilityLabel={`${selected} details`}
-              autoFocus
-              onChangeText={setValue}
-              placeholder={selected === "Focus" ? "Minutes completed, or leave blank to start" : `Describe your ${selected.toLowerCase()}`}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-              value={value}
-            />
-            <PrimaryButton label={value.trim() || selected === "Focus" ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={save} />
+            {selected === "Expense" ? (
+              <>
+                <TextInput
+                  accessibilityLabel="Expense amount"
+                  autoFocus
+                  keyboardType="decimal-pad"
+                  onChangeText={(amount) => setExpense((current) => ({ ...current, amount }))}
+                  placeholder="Amount"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={expense.amount}
+                />
+                <TextInput
+                  accessibilityLabel="Merchant"
+                  onChangeText={(merchant) => setExpense((current) => ({ ...current, merchant }))}
+                  placeholder="Merchant (optional)"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={expense.merchant}
+                />
+                <TextInput
+                  accessibilityLabel="Expense category"
+                  onChangeText={(category) => setExpense((current) => ({ ...current, category }))}
+                  placeholder="Category"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={expense.category}
+                />
+                <TextInput
+                  accessibilityLabel="Expense date"
+                  onChangeText={(date) => setExpense((current) => ({ ...current, date }))}
+                  placeholder="Date YYYY-MM-DD (optional)"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={expense.date}
+                />
+                <TextInput
+                  accessibilityLabel="Expense note"
+                  onChangeText={(note) => setExpense((current) => ({ ...current, note }))}
+                  placeholder="Note (optional)"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={expense.note}
+                />
+              </>
+            ) : selected === "Task" ? (
+              <>
+                <TextInput
+                  accessibilityLabel="Task title"
+                  autoFocus
+                  onChangeText={(title) => setTask((current) => ({ ...current, title }))}
+                  placeholder="Task title"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={task.title}
+                />
+                <TextInput
+                  accessibilityLabel="Task location"
+                  onChangeText={(location) => setTask((current) => ({ ...current, location }))}
+                  placeholder="Location (optional)"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={task.location}
+                />
+                <TextInput
+                  accessibilityLabel="Meeting link"
+                  autoCapitalize="none"
+                  onChangeText={(meetingLink) => setTask((current) => ({ ...current, meetingLink }))}
+                  placeholder="Meeting link (optional)"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={task.meetingLink}
+                />
+                <TextInput
+                  accessibilityLabel="Task note"
+                  onChangeText={(note) => setTask((current) => ({ ...current, note }))}
+                  placeholder="Notes (optional)"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={task.note}
+                />
+              </>
+            ) : (
+              <TextInput
+                accessibilityLabel={`${selected} details`}
+                autoFocus
+                onChangeText={setValue}
+                placeholder={selected === "Focus" ? "Minutes completed, or leave blank to start" : `Describe your ${selected.toLowerCase()}`}
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                value={value}
+              />
+            )}
+            <PrimaryButton label={selected === "Focus" || selected === "Expense" || selected === "Task" || value.trim() ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={save} />
             <Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={styles.changeType}>
               <Text style={styles.changeTypeText}>Choose another type</Text>
             </Pressable>
