@@ -29,6 +29,15 @@ const task = v.object({
   title: v.string(),
 });
 
+const transaction = v.object({
+  _id: v.id("transactions"),
+  _creationTime: v.number(),
+  amount: v.number(),
+  category: v.string(),
+  occurredAt: v.number(),
+  status: v.union(v.literal("pending"), v.literal("confirmed"), v.literal("ignored")),
+});
+
 const activeTimer = v.object({
   _id: v.id("activeTimers"),
   _creationTime: v.number(),
@@ -111,6 +120,7 @@ export const today = query({
     focusCategory: v.union(focusCategory, v.null()),
     focusSessionsThisWeek: v.number(),
     plannedTasks: v.array(task),
+    pendingTransactions: v.array(transaction),
     reflectionDue: v.boolean(),
     settings: v.union(settings, v.null()),
   }),
@@ -122,6 +132,11 @@ export const today = query({
       .query("tasks")
       .withIndex("by_status", (q) => q.eq("status", "planned"))
       .take(20);
+    const pendingTransactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .order("desc")
+      .take(3);
     const [lastReflection] = await ctx.db.query("reflections").order("desc").take(1);
     const dayStart = new Date(now);
     dayStart.setHours(0, 0, 0, 0);
@@ -139,6 +154,7 @@ export const today = query({
       focusCategory: focus,
       focusSessionsThisWeek: focusSessions.filter((session) => session.completedAt >= weekStart)
         .length,
+      pendingTransactions,
       plannedTasks: plannedTasks.sort((a, b) => (a.scheduledAt ?? now) - (b.scheduledAt ?? now)),
       reflectionDue:
         !!settingsDoc &&
@@ -159,11 +175,20 @@ export const completeTask = mutation({
 });
 
 export const addTask = mutation({
-  args: { title: v.string() },
+  args: { scheduledAt: v.optional(v.number()), title: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
     const title = args.title.trim();
-    if (title) await ctx.db.insert("tasks", { title, status: "planned" });
+    if (title) await ctx.db.insert("tasks", { scheduledAt: args.scheduledAt, title, status: "planned" });
+    return null;
+  },
+});
+
+export const scheduleTask = mutation({
+  args: { scheduledAt: v.optional(v.number()), taskId: v.id("tasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.taskId, { scheduledAt: args.scheduledAt });
     return null;
   },
 });
@@ -281,6 +306,107 @@ export const addExpense = mutation({
       occurredAt: Date.now(),
       status: "pending",
     });
+    return null;
+  },
+});
+
+export const calendar = query({
+  args: { from: v.number(), to: v.number() },
+  returns: v.object({
+    focusSessions: v.array(v.object({
+      _id: v.id("focusSessions"),
+      _creationTime: v.number(),
+      categoryId: v.id("focusCategories"),
+      completedAt: v.number(),
+      durationMinutes: v.number(),
+      source: v.union(v.literal("timer"), v.literal("manual")),
+    })),
+    scheduledTasks: v.array(task),
+    unscheduledTasks: v.array(task),
+  }),
+  handler: async (ctx, args) => {
+    const from = Math.max(0, Math.min(args.from, args.to));
+    const to = Math.min(Math.max(args.from, args.to), from + 31 * 24 * MS_PER_HOUR);
+    const scheduledTasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status_and_scheduledAt", (q) =>
+        q.eq("status", "planned").gte("scheduledAt", from).lte("scheduledAt", to),
+      )
+      .take(100);
+    const focus = await ctx.db.query("appSettings").order("desc").first();
+    const focusSessions = focus
+      ? (await ctx.db
+          .query("focusSessions")
+          .withIndex("by_category", (q) => q.eq("categoryId", focus.focusCategoryId))
+          .order("desc")
+          .take(100)).filter((session) => session.completedAt >= from && session.completedAt <= to)
+      : [];
+    const unscheduledTasks = (await ctx.db
+      .query("tasks")
+      .withIndex("by_status", (q) => q.eq("status", "planned"))
+      .take(50)).filter((item) => item.scheduledAt === undefined);
+
+    return {
+      focusSessions,
+      scheduledTasks: scheduledTasks.sort((a, b) => (a.scheduledAt ?? 0) - (b.scheduledAt ?? 0)),
+      unscheduledTasks,
+    };
+  },
+});
+
+export const money = query({
+  args: {},
+  returns: v.object({
+    budget: v.number(),
+    confirmed: v.array(transaction),
+    pending: v.array(transaction),
+    spent: v.number(),
+    summary: v.array(v.object({ amount: v.number(), category: v.string() })),
+  }),
+  handler: async (ctx) => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
+    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    const confirmed = await ctx.db
+      .query("transactions")
+      .withIndex("by_status_and_occurredAt", (q) =>
+        q.eq("status", "confirmed").gte("occurredAt", monthStart).lt("occurredAt", monthEnd),
+      )
+      .order("desc")
+      .take(50);
+    const pending = await ctx.db
+      .query("transactions")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .order("desc")
+      .take(20);
+    const byCategory = new Map<string, number>();
+    for (const item of confirmed) byCategory.set(item.category, (byCategory.get(item.category) ?? 0) + item.amount);
+
+    return {
+      budget: settingsDoc?.monthlyBudget ?? 0,
+      confirmed,
+      pending,
+      spent: confirmed.reduce((total, item) => total + item.amount, 0),
+      summary: [...byCategory.entries()].map(([category, amount]) => ({ amount, category })),
+    };
+  },
+});
+
+export const updateTransaction = mutation({
+  args: {
+    amount: v.optional(v.number()),
+    category: v.optional(v.string()),
+    status: v.optional(v.union(v.literal("pending"), v.literal("confirmed"), v.literal("ignored"))),
+    transactionId: v.id("transactions"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const patch: Partial<{ amount: number; category: string; status: "pending" | "confirmed" | "ignored" }> = {};
+    if (args.amount !== undefined && Number.isFinite(args.amount) && args.amount > 0) patch.amount = Math.round(args.amount);
+    if (args.category !== undefined && args.category.trim()) patch.category = args.category.trim();
+    if (args.status !== undefined) patch.status = args.status;
+    if (Object.keys(patch).length) await ctx.db.patch(args.transactionId, patch);
     return null;
   },
 });
