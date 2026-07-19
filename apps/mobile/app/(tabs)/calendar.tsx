@@ -1,22 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../../convex/_generated/api";
-import { ChoiceDropdown } from "../../src/components/ChoiceDropdown";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
 import { PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
 import { colors, spacing } from "../../src/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const timeOptions = Array.from({ length: 34 }, (_, index) => {
-  const total = 6 * 60 + index * 30;
-  const hours = `${Math.floor(total / 60)}`.padStart(2, "0");
-  const minutes = `${total % 60}`.padStart(2, "0");
-  return { label: `${hours}:${minutes}`, value: `${hours}:${minutes}` };
-});
+const hours = Array.from({ length: 24 }, (_, index) => index);
+const minutes = [0, 15, 30, 45];
 
 function timeOnDay(dayStart: number, value: string) {
   const [hours = "9", minutes = "0"] = value.split(":");
@@ -32,6 +27,7 @@ export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState(dateInput(Date.now()));
   const dayStart = useMemo(() => parseDate(selectedDate), [selectedDate]);
   const selectedDay = useMemo(() => new Date(dayStart), [dayStart]);
+  const days = useMemo(() => Array.from({ length: 7 }, (_, index) => new Date(dayStart + index * DAY_MS)), [dayStart]);
   const calendar = useQuery(api.core.calendar, {
     from: dayStart,
     to: dayStart + DAY_MS - 1,
@@ -68,6 +64,27 @@ export default function CalendarScreen() {
       subtitle="Selected day"
       title="Calendar"
     >
+      <View style={styles.week}>
+        {days.map((day) => {
+          const value = dateInput(day.getTime());
+          const selected = selectedDate === value;
+          return (
+            <Pressable
+              accessibilityLabel={day.toDateString()}
+              accessibilityRole="button"
+              key={value}
+              onPress={() => setSelectedDate(value)}
+              style={[styles.day, selected && styles.daySelected]}
+            >
+              <Text style={[styles.dayName, selected && styles.dayTextSelected]}>
+                {day.toLocaleDateString([], { weekday: "short" }).slice(0, 1)}
+              </Text>
+              <Text style={[styles.date, selected && styles.dayTextSelected]}>{day.getDate()}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <Surface style={styles.pickerSurface}>
         <DatePickerField label="Calendar date" onChange={setSelectedDate} value={selectedDate} />
       </Surface>
@@ -112,7 +129,7 @@ export default function CalendarScreen() {
           style={styles.input}
           value={taskForm.title}
         />
-        <ChoiceDropdown label="Task time" onSelect={(time) => setTaskForm((current) => ({ ...current, time }))} options={timeOptions} value={taskForm.time} />
+        <ClockTimePicker value={taskForm.time} onChange={(time) => setTaskForm((current) => ({ ...current, time }))} />
         <TextInput
           accessibilityLabel="Task location"
           onChangeText={(location) => setTaskForm((current) => ({ ...current, location }))}
@@ -164,7 +181,66 @@ export default function CalendarScreen() {
   );
 }
 
+function ClockTimePicker({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+  const [open, setOpen] = useState(false);
+  const [hourText = "09", minuteText = "00"] = value.split(":");
+  const selectedHour = Number(hourText) || 0;
+  const selectedMinute = Number(minuteText) || 0;
+
+  function setTime(hour: number, minute: number) {
+    onChange(`${`${hour}`.padStart(2, "0")}:${`${minute}`.padStart(2, "0")}`);
+  }
+
+  return (
+    <View>
+      <Pressable accessibilityRole="button" onPress={() => setOpen(true)} style={styles.timeTrigger}>
+        <Ionicons color={colors.primaryDark} name="time-outline" size={20} />
+        <View style={styles.eventCopy}>
+          <Text style={styles.timeLabel}>Task time</Text>
+          <Text style={styles.timeValue}>{value}</Text>
+        </View>
+      </Pressable>
+      <Modal animationType="fade" transparent visible={open} onRequestClose={() => setOpen(false)}>
+        <View style={styles.timeBackdrop}>
+          <View style={styles.timeSheet}>
+            <View style={styles.timeHeader}>
+              <Text style={styles.timeTitle}>Pick time</Text>
+              <Pressable accessibilityLabel="Close time picker" accessibilityRole="button" onPress={() => setOpen(false)} style={styles.closeButton}>
+                <Ionicons color={colors.text} name="close" size={20} />
+              </Pressable>
+            </View>
+            <Text style={styles.timePreview}>{value}</Text>
+            <Text style={styles.timeLabel}>Hour</Text>
+            <View style={styles.clockGrid}>
+              {hours.map((hour) => (
+                <Pressable accessibilityRole="button" key={hour} onPress={() => setTime(hour, selectedMinute)} style={[styles.clockOption, selectedHour === hour && styles.clockSelected]}>
+                  <Text style={[styles.clockText, selectedHour === hour && styles.clockTextSelected]}>{hour}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.timeLabel}>Minute</Text>
+            <View style={styles.minuteGrid}>
+              {minutes.map((minute) => (
+                <Pressable accessibilityRole="button" key={minute} onPress={() => setTime(selectedHour, minute)} style={[styles.minuteOption, selectedMinute === minute && styles.clockSelected]}>
+                  <Text style={[styles.clockText, selectedMinute === minute && styles.clockTextSelected]}>{`${minute}`.padStart(2, "0")}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <PrimaryButton label="Done" onPress={() => setOpen(false)} />
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  week: { flexDirection: "row", justifyContent: "space-between" },
+  day: { alignItems: "center", borderRadius: 22, gap: 6, minHeight: 64, paddingHorizontal: 10, paddingVertical: 8 },
+  daySelected: { backgroundColor: colors.primary },
+  dayName: { color: colors.muted, fontSize: 11, fontWeight: "600" },
+  date: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  dayTextSelected: { color: colors.surface },
   pickerSurface: { overflow: "visible", padding: spacing.md, zIndex: 10 },
   events: { gap: spacing.md },
   event: { alignItems: "center", flexDirection: "row", minHeight: 76 },
@@ -177,4 +253,28 @@ const styles = StyleSheet.create({
   input: { borderColor: colors.border, borderRadius: 14, borderWidth: 1, color: colors.text, fontSize: 15, minHeight: 48, paddingHorizontal: spacing.md },
   unscheduled: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 68 },
   emptyText: { color: colors.muted, fontSize: 14, padding: spacing.md },
+  timeTrigger: {
+    alignItems: "center",
+    borderColor: colors.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+  },
+  timeLabel: { color: colors.muted, fontSize: 12, fontWeight: "600", marginBottom: spacing.xs },
+  timeValue: { color: colors.text, fontSize: 15, fontWeight: "700" },
+  timeBackdrop: { alignItems: "center", backgroundColor: "rgba(47,58,51,0.42)", flex: 1, justifyContent: "center", padding: spacing.lg },
+  timeSheet: { backgroundColor: colors.surface, borderRadius: 22, gap: spacing.sm, maxWidth: 380, padding: spacing.lg, width: "100%" },
+  timeHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  timeTitle: { color: colors.text, fontSize: 18, fontWeight: "700" },
+  closeButton: { alignItems: "center", height: 40, justifyContent: "center", width: 40 },
+  timePreview: { color: colors.primaryDark, fontSize: 30, fontWeight: "700", textAlign: "center" },
+  clockGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  clockOption: { alignItems: "center", borderColor: colors.border, borderRadius: 24, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
+  clockSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  clockText: { color: colors.text, fontSize: 13, fontWeight: "700" },
+  clockTextSelected: { color: colors.surface },
+  minuteGrid: { flexDirection: "row", gap: spacing.sm },
+  minuteOption: { alignItems: "center", borderColor: colors.border, borderRadius: 24, borderWidth: 1, flex: 1, height: 44, justifyContent: "center" },
 });
