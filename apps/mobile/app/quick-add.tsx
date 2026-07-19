@@ -1,23 +1,49 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useMutation } from "convex/react";
 import { router } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { api } from "../convex/_generated/api";
 import { PrimaryButton, Surface } from "../src/components/ui";
 import { colors, radii, spacing } from "../src/theme";
 
 const types = [
   ["Task", "Action or to-do", "checkbox-outline", colors.lavenderSurface],
   ["Expense", "Spend or purchase", "cash-outline", colors.sageSurface],
-  ["Focus", "Start a focus session", "timer-outline", colors.lavenderSurface],
-  ["Note", "Write a quick note", "document-text-outline", colors.mustardSurface],
-  ["Voice", "Capture by voice", "mic-outline", colors.coralSurface],
+  ["Focus", "Start or log focus", "timer-outline", colors.lavenderSurface],
+  ["Note", "Save as a task note", "document-text-outline", colors.mustardSurface],
+  ["Voice", "Type the captured words", "mic-outline", colors.coralSurface],
 ] as const;
 
 export default function QuickAddModal() {
+  const addTask = useMutation(api.core.addTask);
+  const addExpense = useMutation(api.core.addExpense);
+  const addManualFocus = useMutation(api.core.addManualFocus);
+  const startFocus = useMutation(api.core.startFocus);
   const [selected, setSelected] = useState<string | null>(null);
   const [value, setValue] = useState("");
+
+  async function save() {
+    const text = value.trim();
+    if (selected === "Focus") {
+      if (text) await addManualFocus({ minutes: Number(text) || 30 });
+      else await startFocus({});
+      router.back();
+      return;
+    }
+    if (!text) return;
+    if (selected === "Expense") {
+      await addExpense({
+        amount: Number(text.replace(/[^0-9.]/g, "")),
+        category: text.replace(/[0-9.]/g, "").trim() || "General",
+      });
+    } else {
+      await addTask({ title: text });
+    }
+    router.back();
+  }
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.overlay}>
@@ -27,7 +53,7 @@ export default function QuickAddModal() {
         <View style={styles.headingRow}>
           <View>
             <Text style={styles.title}>What would you like to add?</Text>
-            <Text style={styles.subtitle}>Capture it now. You can refine it later.</Text>
+            <Text style={styles.subtitle}>Captured items update Today.</Text>
           </View>
           <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={() => router.back()} style={styles.close}>
             <Ionicons color={colors.text} name="close" size={22} />
@@ -41,12 +67,12 @@ export default function QuickAddModal() {
               accessibilityLabel={`${selected} details`}
               autoFocus
               onChangeText={setValue}
-              placeholder={`Describe your ${selected.toLowerCase()}`}
+              placeholder={selected === "Focus" ? "Minutes completed, or leave blank to start" : `Describe your ${selected.toLowerCase()}`}
               placeholderTextColor={colors.muted}
               style={styles.input}
               value={value}
             />
-            <PrimaryButton label={value.trim() ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={() => value.trim() && router.back()} />
+            <PrimaryButton label={value.trim() || selected === "Focus" ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={save} />
             <Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={styles.changeType}>
               <Text style={styles.changeTypeText}>Choose another type</Text>
             </Pressable>
