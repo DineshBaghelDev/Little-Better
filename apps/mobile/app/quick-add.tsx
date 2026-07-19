@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
+import { DatePickerField } from "../src/components/DatePickerField";
 import { PrimaryButton, Surface } from "../src/components/ui";
 import { colors, radii, spacing } from "../src/theme";
 
@@ -37,6 +38,7 @@ export default function QuickAddModal() {
     paymentMethod: "online" as "cash" | "online",
     type: "expense" as "expense" | "income",
   });
+  const [focusDuration, setFocusDuration] = useState({ hours: "", minutes: "30" });
   const [task, setTask] = useState({ location: "", meetingLink: "", note: "", title: "" });
   const [value, setValue] = useState("");
 
@@ -52,7 +54,8 @@ export default function QuickAddModal() {
   async function save() {
     const text = value.trim();
     if (selected === "Focus") {
-      if (text) await addManualFocus({ minutes: Number(text) || 30 });
+      const minutes = (Number(focusDuration.hours) || 0) * 60 + (Number(focusDuration.minutes) || 0);
+      if (minutes > 0) await addManualFocus({ minutes });
       else await startFocus({});
       router.back();
       return;
@@ -148,19 +151,12 @@ export default function QuickAddModal() {
                     <View key={category._id} style={styles.categoryChip}>
                       <Chip label={category.name} selected={expense.category === category.name} onPress={() => setExpense((current) => ({ ...current, category: category.name }))} />
                       <Pressable accessibilityLabel={`Delete ${category.name} category`} accessibilityRole="button" onPress={() => removeCategory({ categoryId: category._id })} style={styles.deleteCategory}>
-                        <Ionicons color={colors.coral} name="close" size={16} />
+                        <Ionicons color={colors.coral} name="trash-outline" size={16} />
                       </Pressable>
                     </View>
                   ))}
                 </View>
-                <TextInput
-                  accessibilityLabel="Expense date"
-                  onChangeText={(date) => setExpense((current) => ({ ...current, date }))}
-                  placeholder="Date YYYY-MM-DD (optional)"
-                  placeholderTextColor={colors.muted}
-                  style={styles.input}
-                  value={expense.date}
-                />
+                <DatePickerField label="Expense date" onChange={(date) => setExpense((current) => ({ ...current, date }))} value={expense.date} />
                 <TextInput
                   accessibilityLabel="Expense note"
                   onChangeText={(note) => setExpense((current) => ({ ...current, note }))}
@@ -207,12 +203,34 @@ export default function QuickAddModal() {
                   value={task.note}
                 />
               </>
+            ) : selected === "Focus" ? (
+              <View style={styles.inline}>
+                <TextInput
+                  accessibilityLabel="Focus hours"
+                  autoFocus
+                  keyboardType="number-pad"
+                  onChangeText={(hours) => setFocusDuration((current) => ({ ...current, hours }))}
+                  placeholder="Hours"
+                  placeholderTextColor={colors.muted}
+                  style={[styles.input, styles.grow]}
+                  value={focusDuration.hours}
+                />
+                <TextInput
+                  accessibilityLabel="Focus minutes"
+                  keyboardType="number-pad"
+                  onChangeText={(minutes) => setFocusDuration((current) => ({ ...current, minutes }))}
+                  placeholder="Minutes"
+                  placeholderTextColor={colors.muted}
+                  style={[styles.input, styles.grow]}
+                  value={focusDuration.minutes}
+                />
+              </View>
             ) : (
               <TextInput
                 accessibilityLabel={`${selected} details`}
                 autoFocus
                 onChangeText={setValue}
-                placeholder={selected === "Focus" ? "Minutes completed, or leave blank to start" : `Describe your ${selected.toLowerCase()}`}
+                placeholder={`Describe your ${selected.toLowerCase()}`}
                 placeholderTextColor={colors.muted}
                 style={styles.input}
                 value={value}
@@ -264,12 +282,13 @@ const styles = StyleSheet.create({
   changeType: { alignItems: "center", minHeight: 44, paddingTop: spacing.sm },
   changeTypeText: { color: colors.primaryDark, fontSize: 14, fontWeight: "600" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  inline: { flexDirection: "row", gap: spacing.sm },
   chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   chipTextSelected: { color: colors.surface },
   categoryChip: { flexDirection: "row" },
-  deleteCategory: { alignItems: "center", height: 44, justifyContent: "center", marginLeft: -10, width: 28 },
+  deleteCategory: { alignItems: "center", backgroundColor: colors.coralSurface, borderRadius: radii.pill, height: 44, justifyContent: "center", marginLeft: -10, width: 34 },
 });
 
 function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
