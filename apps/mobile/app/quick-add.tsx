@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "../convex/_generated/api";
+import { Id } from "../convex/_generated/dataModel";
 import { PrimaryButton, Surface } from "../src/components/ui";
 import { colors, radii, spacing } from "../src/theme";
 
@@ -18,17 +19,31 @@ const types = [
 ] as const;
 
 export default function QuickAddModal() {
+  const ensureMoneyDefaults = useMutation(api.core.ensureMoneyDefaults);
   const addTask = useMutation(api.core.addTask);
   const addExpense = useMutation(api.core.addExpense);
   const addManualFocus = useMutation(api.core.addManualFocus);
   const startFocus = useMutation(api.core.startFocus);
+  const money = useQuery(api.core.money, {});
   const [selected, setSelected] = useState<string | null>(null);
-  const [expense, setExpense] = useState({ amount: "", category: "", date: "", merchant: "", note: "" });
+  const [expense, setExpense] = useState({
+    accountId: undefined as Id<"accounts"> | undefined,
+    amount: "",
+    category: "Food",
+    date: new Date().toISOString().slice(0, 10),
+    merchant: "",
+    note: "",
+    paymentMethod: "online" as "cash" | "online",
+    type: "expense" as "expense" | "income",
+  });
   const [task, setTask] = useState({ location: "", meetingLink: "", note: "", title: "" });
   const [value, setValue] = useState("");
 
+  useEffect(() => {
+    void ensureMoneyDefaults({});
+  }, [ensureMoneyDefaults]);
+
   function expenseDate() {
-    if (!expense.date.trim()) return undefined;
     const parsed = new Date(expense.date);
     return Number.isNaN(parsed.getTime()) ? undefined : parsed.getTime();
   }
@@ -44,11 +59,14 @@ export default function QuickAddModal() {
     if (selected === "Expense") {
       if (!expense.amount.trim()) return;
       await addExpense({
+        accountId: expense.accountId ?? money?.accounts[0]?._id,
         amount: Number(expense.amount),
         category: expense.category || "General",
         merchant: expense.merchant,
         note: expense.note,
         occurredAt: expenseDate(),
+        paymentMethod: expense.paymentMethod,
+        type: expense.type,
       });
     } else if (selected === "Task") {
       if (!task.title.trim()) return;
@@ -85,6 +103,17 @@ export default function QuickAddModal() {
             <Text style={styles.selectedLabel}>{selected}</Text>
             {selected === "Expense" ? (
               <>
+                <View style={styles.chips}>
+                  <Chip label="Expense" selected={expense.type === "expense"} onPress={() => setExpense((current) => ({ ...current, category: "Food", type: "expense" }))} />
+                  <Chip label="Income" selected={expense.type === "income"} onPress={() => setExpense((current) => ({ ...current, category: "Salary", type: "income" }))} />
+                  <Chip label="Online" selected={expense.paymentMethod === "online"} onPress={() => setExpense((current) => ({ ...current, paymentMethod: "online" }))} />
+                  <Chip label="Cash" selected={expense.paymentMethod === "cash"} onPress={() => setExpense((current) => ({ ...current, paymentMethod: "cash" }))} />
+                </View>
+                <View style={styles.chips}>
+                  {(money?.accounts ?? []).map((account) => (
+                    <Chip key={account._id} label={account.name} selected={(expense.accountId ?? money?.accounts[0]?._id) === account._id} onPress={() => setExpense((current) => ({ ...current, accountId: account._id }))} />
+                  ))}
+                </View>
                 <TextInput
                   accessibilityLabel="Expense amount"
                   autoFocus
@@ -111,6 +140,11 @@ export default function QuickAddModal() {
                   style={styles.input}
                   value={expense.category}
                 />
+                <View style={styles.chips}>
+                  {(money?.categories.filter((item) => item.type === expense.type) ?? []).map((category) => (
+                    <Chip key={category._id} label={category.name} selected={expense.category === category.name} onPress={() => setExpense((current) => ({ ...current, category: category.name }))} />
+                  ))}
+                </View>
                 <TextInput
                   accessibilityLabel="Expense date"
                   onChangeText={(date) => setExpense((current) => ({ ...current, date }))}
@@ -221,4 +255,17 @@ const styles = StyleSheet.create({
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 16, minHeight: 52, paddingHorizontal: spacing.md },
   changeType: { alignItems: "center", minHeight: 44, paddingTop: spacing.sm },
   changeTypeText: { color: colors.primaryDark, fontSize: 14, fontWeight: "600" },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
+  chipTextSelected: { color: colors.surface },
 });
+
+function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
