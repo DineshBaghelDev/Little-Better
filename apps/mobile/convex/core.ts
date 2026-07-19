@@ -51,6 +51,7 @@ const account = v.object({
   _creationTime: v.number(),
   archived: v.optional(v.boolean()),
   balance: v.number(),
+  baseBalance: v.number(),
   name: v.string(),
 });
 
@@ -494,7 +495,7 @@ export const money = query({
     }
 
     return {
-      accounts: accounts.map((item) => ({ ...item, balance: accountTotals.get(item._id) ?? item.balance })),
+      accounts: accounts.map((item) => ({ ...item, baseBalance: item.balance, balance: accountTotals.get(item._id) ?? item.balance })),
       budget: settingsDoc?.monthlyBudget ?? 0,
       categories: await ctx.db.query("transactionCategories").take(50),
       confirmed: visibleConfirmed,
