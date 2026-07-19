@@ -1,23 +1,37 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useMutation, useQuery } from "convex/react";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 
+import { api } from "../convex/_generated/api";
 import { Mascot } from "../src/components/ui";
 import { colors, radii, spacing } from "../src/theme";
 
 const SESSION_SECONDS = 30 * 60;
 
 export default function FocusScreen() {
-  const [remaining, setRemaining] = useState(SESSION_SECONDS);
-  const [paused, setPaused] = useState(false);
+  const focus = useQuery(api.core.focusState);
+  const startFocus = useMutation(api.core.startFocus);
+  const setPaused = useMutation(api.core.setFocusPaused);
+  const endFocus = useMutation(api.core.endFocus);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    if (paused || remaining === 0) return;
-    const timer = setInterval(() => setRemaining((value) => Math.max(0, value - 1)), 1000);
-    return () => clearInterval(timer);
-  }, [paused, remaining]);
+    void startFocus({});
+  }, [startFocus]);
 
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const timer = focus?.activeTimer;
+  const elapsed = timer
+    ? timer.elapsedSeconds + (timer.status === "running" ? Math.floor((now - timer.startedAt) / 1000) : 0)
+    : 0;
+  const remaining = Math.max(0, SESSION_SECONDS - elapsed);
+  const paused = timer?.status === "paused";
   const minutes = Math.floor(remaining / 60).toString().padStart(2, "0");
   const seconds = (remaining % 60).toString().padStart(2, "0");
 
@@ -27,16 +41,18 @@ export default function FocusScreen() {
         <Pressable accessibilityLabel="Close focus session" accessibilityRole="button" onPress={() => router.back()} style={styles.iconButton}>
           <Ionicons color={colors.text} name="close" size={24} />
         </Pressable>
-        <Pressable accessibilityLabel="Focus settings" accessibilityRole="button" style={styles.iconButton}>
-          <Ionicons color={colors.text} name="options-outline" size={22} />
-        </Pressable>
+        <View style={styles.iconButton}>
+          <Ionicons color={colors.text} name="timer-outline" size={22} />
+        </View>
       </View>
 
       <View style={styles.center}>
-        <Text style={styles.title}>Deep work</Text>
+        <Text style={styles.title}>{focus?.focusCategory?.name ?? "Focus"}</Text>
         <Text style={styles.meta}>Focus session</Text>
         <View accessibilityLabel={`${minutes} minutes ${seconds} seconds remaining`} style={styles.timerRing}>
-          <Text style={styles.timer}>{minutes}:{seconds}</Text>
+          <Text style={styles.timer}>
+            {minutes}:{seconds}
+          </Text>
           <Text style={styles.timerMeta}>of 30:00</Text>
         </View>
         <Mascot size={96} />
@@ -44,13 +60,24 @@ export default function FocusScreen() {
 
       <View style={styles.controls}>
         <View style={styles.controlGroup}>
-          <Pressable accessibilityRole="button" onPress={() => setPaused((value) => !value)} style={styles.control}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => timer && setPaused({ paused: !paused, timerId: timer._id })}
+            style={styles.control}
+          >
             <Ionicons color={colors.text} name={paused ? "play" : "pause"} size={24} />
           </Pressable>
           <Text style={styles.controlLabel}>{paused ? "Resume" : "Pause"}</Text>
         </View>
         <View style={styles.controlGroup}>
-          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.control}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={async () => {
+              if (timer) await endFocus({ timerId: timer._id });
+              router.back();
+            }}
+            style={styles.control}
+          >
             <Ionicons color={colors.coral} name="stop" size={22} />
           </Pressable>
           <Text style={styles.controlLabel}>End</Text>

@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useMutation } from "convex/react";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { api } from "../convex/_generated/api";
 import { Mascot, PrimaryButton } from "../src/components/ui";
 import { colors, radii, spacing } from "../src/theme";
 
@@ -15,7 +17,9 @@ const descriptors = [
 ] as const;
 
 export default function ReflectionScreen() {
+  const addReflection = useMutation(api.core.addReflection);
   const [selected, setSelected] = useState<string[]>([]);
+  const [note, setNote] = useState("");
 
   function toggle(label: string) {
     setSelected((items) => items.includes(label) ? items.filter((item) => item !== label) : [...items, label]);
@@ -53,11 +57,16 @@ export default function ReflectionScreen() {
         <TextInput
           accessibilityLabel="Optional reflection note"
           multiline
+          onChangeText={setNote}
           placeholder="Anything else? (optional)"
           placeholderTextColor={colors.muted}
           style={styles.note}
+          value={note}
         />
-        <PrimaryButton label="Done" onPress={() => router.back()} />
+        <PrimaryButton label="Done" onPress={async () => {
+          await addReflection({ note, tags: selected });
+          router.back();
+        }} />
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.skip}>
           <Text style={styles.skipText}>Skip for now</Text>
         </Pressable>
