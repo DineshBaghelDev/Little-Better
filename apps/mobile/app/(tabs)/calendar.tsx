@@ -4,31 +4,40 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../../convex/_generated/api";
+import { ChoiceDropdown } from "../../src/components/ChoiceDropdown";
+import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
 import { PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
 import { colors, spacing } from "../../src/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const timeOptions = Array.from({ length: 34 }, (_, index) => {
+  const total = 6 * 60 + index * 30;
+  const hours = `${Math.floor(total / 60)}`.padStart(2, "0");
+  const minutes = `${total % 60}`.padStart(2, "0");
+  return { label: `${hours}:${minutes}`, value: `${hours}:${minutes}` };
+});
 
 function timeOnDay(dayStart: number, value: string) {
   const [hours = "9", minutes = "0"] = value.split(":");
   return dayStart + (Number(hours) || 9) * 60 * 60 * 1000 + (Number(minutes) || 0) * 60 * 1000;
 }
 
+function parseDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return year && month && day ? new Date(year, month - 1, day).getTime() : Date.now();
+}
+
 export default function CalendarScreen() {
-  const today = useMemo(() => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    return date;
-  }, []);
-  const days = useMemo(() => Array.from({ length: 7 }, (_, index) => new Date(today.getTime() + index * DAY_MS)), [today]);
+  const [selectedDate, setSelectedDate] = useState(dateInput(Date.now()));
+  const dayStart = useMemo(() => parseDate(selectedDate), [selectedDate]);
+  const selectedDay = useMemo(() => new Date(dayStart), [dayStart]);
   const calendar = useQuery(api.core.calendar, {
-    from: days[0].getTime(),
-    to: days[6].getTime() + DAY_MS - 1,
+    from: dayStart,
+    to: dayStart + DAY_MS - 1,
   });
   const addTask = useMutation(api.core.addTask);
   const scheduleTask = useMutation(api.core.scheduleTask);
-  const [selectedDay, setSelectedDay] = useState(0);
   const [taskForm, setTaskForm] = useState({
     location: "",
     meetingLink: "",
@@ -36,8 +45,6 @@ export default function CalendarScreen() {
     time: "09:00",
     title: "",
   });
-  const selectedDate = days[selectedDay];
-  const dayStart = selectedDate.getTime();
   const dayEnd = dayStart + DAY_MS;
   const scheduled = calendar?.scheduledTasks.filter((task) => (task.scheduledAt ?? 0) >= dayStart && (task.scheduledAt ?? 0) < dayEnd) ?? [];
   const sessions = calendar?.focusSessions.filter((session) => session.completedAt >= dayStart && session.completedAt < dayEnd) ?? [];
@@ -58,27 +65,14 @@ export default function CalendarScreen() {
   return (
     <Screen
       headerAction={<Ionicons color={colors.text} name="calendar-outline" size={24} />}
-      subtitle="This week"
+      subtitle="Selected day"
       title="Calendar"
     >
-      <View style={styles.week}>
-        {days.map((day, index) => (
-          <Pressable
-            accessibilityLabel={day.toDateString()}
-            accessibilityRole="button"
-            key={day.toISOString()}
-            onPress={() => setSelectedDay(index)}
-            style={[styles.day, selectedDay === index && styles.daySelected]}
-          >
-            <Text style={[styles.dayName, selectedDay === index && styles.dayTextSelected]}>
-              {day.toLocaleDateString([], { weekday: "short" }).slice(0, 1)}
-            </Text>
-            <Text style={[styles.date, selectedDay === index && styles.dayTextSelected]}>{day.getDate()}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <Surface style={styles.pickerSurface}>
+        <DatePickerField label="Calendar date" onChange={setSelectedDate} value={selectedDate} />
+      </Surface>
 
-      <SectionLabel>{selectedDate.toLocaleDateString([], { day: "numeric", month: "long", weekday: "long" })}</SectionLabel>
+      <SectionLabel>{selectedDay.toLocaleDateString([], { day: "numeric", month: "long", weekday: "long" })}</SectionLabel>
       <View style={styles.events}>
         {scheduled.map((task) => (
           <Surface key={task._id} style={styles.event}>
@@ -118,14 +112,7 @@ export default function CalendarScreen() {
           style={styles.input}
           value={taskForm.title}
         />
-        <TextInput
-          accessibilityLabel="Task time"
-          onChangeText={(time) => setTaskForm((current) => ({ ...current, time }))}
-          placeholder="Time, e.g. 14:30"
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={taskForm.time}
-        />
+        <ChoiceDropdown label="Task time" onSelect={(time) => setTaskForm((current) => ({ ...current, time }))} options={timeOptions} value={taskForm.time} />
         <TextInput
           accessibilityLabel="Task location"
           onChangeText={(location) => setTaskForm((current) => ({ ...current, location }))}
@@ -178,12 +165,7 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-  week: { flexDirection: "row", justifyContent: "space-between" },
-  day: { alignItems: "center", borderRadius: 22, gap: 6, minHeight: 64, paddingHorizontal: 10, paddingVertical: 8 },
-  daySelected: { backgroundColor: colors.primary },
-  dayName: { color: colors.muted, fontSize: 11, fontWeight: "600" },
-  date: { color: colors.text, fontSize: 14, fontWeight: "700" },
-  dayTextSelected: { color: colors.surface },
+  pickerSurface: { overflow: "visible", padding: spacing.md, zIndex: 10 },
   events: { gap: spacing.md },
   event: { alignItems: "center", flexDirection: "row", minHeight: 76 },
   eventRail: { alignSelf: "stretch", width: 4 },
