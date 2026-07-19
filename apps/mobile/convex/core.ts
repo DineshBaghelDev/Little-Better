@@ -941,11 +941,12 @@ export const calendar = query({
       .take(100);
     const focus = await ctx.db.query("appSettings").order("desc").first();
     const focusSessions = focus
-      ? (await ctx.db
+      ? await ctx.db
           .query("focusSessions")
-          .withIndex("by_category", (q) => q.eq("categoryId", focus.focusCategoryId))
-          .order("desc")
-          .take(100)).filter((session) => session.completedAt >= from && session.completedAt <= to)
+          .withIndex("by_category_and_completedAt", (q) =>
+            q.eq("categoryId", focus.focusCategoryId).gte("completedAt", from).lte("completedAt", to),
+          )
+          .take(100)
       : [];
     const unscheduledTasks = (await ctx.db
       .query("tasks")

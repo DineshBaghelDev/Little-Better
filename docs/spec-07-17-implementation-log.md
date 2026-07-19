@@ -19,3 +19,4 @@
 - Added editable Settings for focus category, target type/value, preferred focus hour, reflection hour, and monthly budget.
 - Fixed onboarding so the summary rows reflect live form state and bootstrap stores the selected target type.
 - Implemented category switching by creating a new active focus category, preserving old category history.
+- Reworked Calendar to use an anchored week with back/forward navigation, collapsed creation, tappable scheduled-task actions, explicit unscheduled-task time selection, and focus-session times.
