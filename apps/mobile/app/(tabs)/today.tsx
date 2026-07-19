@@ -13,6 +13,7 @@ export default function TodayTabScreen() {
   const today = useQuery(api.core.today);
   const completeTask = useMutation(api.core.completeTask);
   const startFocus = useMutation(api.core.startFocus);
+  const updateTransaction = useMutation(api.core.updateTransaction);
   const [laterOpen, setLaterOpen] = useState(false);
   const target = today?.focusCategory?.targetValue ?? 3;
   const topTasks = today?.plannedTasks.slice(0, today.activeTimer ? 2 : 3) ?? [];
@@ -39,6 +40,24 @@ export default function TodayTabScreen() {
           <Text style={styles.link}>Reflect</Text>
         </Pressable>
       ) : null}
+
+      {today?.pendingTransactions.map((transaction) => (
+        <Surface key={transaction._id} style={styles.pendingExpense}>
+          <Ionicons color={colors.coral} name="receipt-outline" size={22} />
+          <View style={styles.grow}>
+            <Text style={styles.cardTitle}>{transaction.category}</Text>
+            <Text style={styles.meta}>Pending expense · Rs {transaction.amount.toLocaleString("en-IN")}</Text>
+          </View>
+          <Pressable
+            accessibilityLabel={`Confirm ${transaction.category} expense`}
+            accessibilityRole="button"
+            onPress={() => updateTransaction({ status: "confirmed", transactionId: transaction._id })}
+            style={styles.roundAction}
+          >
+            <Ionicons color={colors.primary} name="checkmark" size={21} />
+          </Pressable>
+        </Surface>
+      ))}
 
       <View style={styles.cardStack}>
         {today?.activeTimer ? (
@@ -163,6 +182,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   cardStack: { gap: spacing.md },
+  pendingExpense: { alignItems: "center", backgroundColor: colors.coralSurface, flexDirection: "row", gap: spacing.md, minHeight: 76, padding: spacing.md },
   priorityCard: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 100, padding: spacing.md },
   rank: { alignItems: "center", height: 34, justifyContent: "center", width: 26 },
   rankText: { color: colors.text, fontSize: 22, fontWeight: "700" },
