@@ -6,7 +6,9 @@ export default defineSchema({
     title: v.string(),
     status: v.union(v.literal("planned"), v.literal("done")),
     scheduledAt: v.optional(v.number()),
-  }).index("by_status", ["status"]),
+  })
+    .index("by_status", ["status"])
+    .index("by_status_and_scheduledAt", ["status", "scheduledAt"]),
   focusCategories: defineTable({
     name: v.string(),
     preferredHour: v.optional(v.number()),
@@ -33,7 +35,9 @@ export default defineSchema({
       v.literal("confirmed"),
       v.literal("ignored"),
     ),
-  }).index("by_status", ["status"]),
+  })
+    .index("by_status", ["status"])
+    .index("by_status_and_occurredAt", ["status", "occurredAt"]),
   reflections: defineTable({
     note: v.optional(v.string()),
     reflectedAt: v.number(),
