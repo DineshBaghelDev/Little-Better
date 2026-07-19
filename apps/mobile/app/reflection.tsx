@@ -18,11 +18,29 @@ const descriptors = [
 
 export default function ReflectionScreen() {
   const addReflection = useMutation(api.core.addReflection);
+  const dismissReflection = useMutation(api.core.dismissReflection);
+  const snoozeReflection = useMutation(api.core.snoozeReflection);
   const [selected, setSelected] = useState<string[]>([]);
   const [note, setNote] = useState("");
 
   function toggle(label: string) {
     setSelected((items) => items.includes(label) ? items.filter((item) => item !== label) : [...items, label]);
+  }
+
+  async function finish() {
+    if (!selected.length && !note.trim()) await dismissReflection({});
+    else await addReflection({ note, tags: selected });
+    router.back();
+  }
+
+  async function skip() {
+    await dismissReflection({});
+    router.back();
+  }
+
+  async function snooze() {
+    await snoozeReflection({});
+    router.back();
   }
 
   return (
@@ -63,11 +81,11 @@ export default function ReflectionScreen() {
           style={styles.note}
           value={note}
         />
-        <PrimaryButton label="Done" onPress={async () => {
-          await addReflection({ note, tags: selected });
-          router.back();
-        }} />
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.skip}>
+        <PrimaryButton label="Done" onPress={finish} />
+        <Pressable accessibilityRole="button" onPress={snooze} style={styles.skip}>
+          <Text style={styles.skipText}>Snooze</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={skip} style={styles.skip}>
           <Text style={styles.skipText}>Skip for now</Text>
         </Pressable>
       </ScrollView>
