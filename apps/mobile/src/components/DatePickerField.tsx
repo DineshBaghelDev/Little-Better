@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radii, spacing } from "../theme";
 
@@ -63,50 +63,52 @@ export function DatePickerField({
         </View>
         <Ionicons color={colors.muted} name={open ? "chevron-up" : "chevron-down"} size={18} />
       </Pressable>
-      {open ? (
-        <View style={styles.calendar}>
-          <View style={styles.header}>
-            <Pressable accessibilityRole="button" onPress={() => moveMonth(-1)} style={styles.iconButton}>
-              <Ionicons color={colors.primaryDark} name="chevron-back" size={20} />
+      <Modal animationType="fade" transparent visible={open} onRequestClose={() => setOpen(false)}>
+        <Pressable accessibilityRole="button" onPress={() => setOpen(false)} style={styles.backdrop}>
+          <Pressable accessibilityRole="none" onPress={(event) => event.stopPropagation()} style={styles.calendar}>
+            <View style={styles.header}>
+              <Pressable accessibilityRole="button" onPress={() => moveMonth(-1)} style={styles.iconButton}>
+                <Ionicons color={colors.primaryDark} name="chevron-back" size={20} />
+              </Pressable>
+              <Text style={styles.month}>{cursorDate.toLocaleDateString([], { month: "long", year: "numeric" })}</Text>
+              <Pressable accessibilityRole="button" onPress={() => moveMonth(1)} style={styles.iconButton}>
+                <Ionicons color={colors.primaryDark} name="chevron-forward" size={20} />
+              </Pressable>
+            </View>
+            <View style={styles.grid}>
+              {cells.map((date, index) => {
+                const time = date ? startOfDay(date.getTime()) : null;
+                const isSelected = time === selected;
+                return (
+                  <Pressable
+                    accessibilityRole={date ? "button" : undefined}
+                    disabled={!date}
+                    key={`${time ?? "blank"}-${index}`}
+                    onPress={() => {
+                      if (!time) return;
+                      onChange(dateInput(time));
+                      setOpen(false);
+                    }}
+                    style={[styles.day, isSelected && styles.daySelected]}
+                  >
+                    <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{date?.getDate() ?? ""}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                onChange(dateInput(Date.now()));
+                setOpen(false);
+              }}
+              style={styles.today}
+            >
+              <Text style={styles.todayText}>Today</Text>
             </Pressable>
-            <Text style={styles.month}>{cursorDate.toLocaleDateString([], { month: "long", year: "numeric" })}</Text>
-            <Pressable accessibilityRole="button" onPress={() => moveMonth(1)} style={styles.iconButton}>
-              <Ionicons color={colors.primaryDark} name="chevron-forward" size={20} />
-            </Pressable>
-          </View>
-          <View style={styles.grid}>
-            {cells.map((date, index) => {
-              const time = date ? startOfDay(date.getTime()) : null;
-              const isSelected = time === selected;
-              return (
-                <Pressable
-                  accessibilityRole={date ? "button" : undefined}
-                  disabled={!date}
-                  key={`${time ?? "blank"}-${index}`}
-                  onPress={() => {
-                    if (!time) return;
-                    onChange(dateInput(time));
-                    setOpen(false);
-                  }}
-                  style={[styles.day, isSelected && styles.daySelected]}
-                >
-                  <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{date?.getDate() ?? ""}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              onChange(dateInput(Date.now()));
-              setOpen(false);
-            }}
-            style={styles.today}
-          >
-            <Text style={styles.todayText}>Today</Text>
           </Pressable>
-        </View>
-      ) : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -126,14 +128,22 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   label: { color: colors.muted, fontSize: 12 },
   value: { color: colors.text, fontSize: 15, fontWeight: "600", marginTop: 2 },
+  backdrop: {
+    alignItems: "center",
+    backgroundColor: "rgba(47,58,51,0.32)",
+    flex: 1,
+    justifyContent: "center",
+    padding: spacing.lg,
+  },
   calendar: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radii.card,
     borderWidth: 1,
     gap: spacing.sm,
-    marginTop: spacing.sm,
+    maxWidth: 360,
     padding: spacing.md,
+    width: "100%",
   },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   iconButton: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
