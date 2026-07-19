@@ -16,24 +16,32 @@ import { api } from "../convex/_generated/api";
 import { Mascot, PrimaryButton, Surface } from "../src/components/ui";
 import { colors, radii, spacing } from "../src/theme";
 
-const setupRows = [
-  { icon: "heart-outline", label: "Focus area", value: "Study" },
-  { icon: "flag-outline", label: "Weekly target", value: "3 sessions" },
-  { icon: "alarm-outline", label: "Preferred focus time", value: "9 AM" },
-  { icon: "moon-outline", label: "Reflection time", value: "8 PM" },
-  { icon: "wallet-outline", label: "Monthly budget", value: "25000" },
-] as const;
+type TargetType = "sessions_per_week" | "minutes_per_day" | "minutes_per_week" | "binary_days";
+
+const targetOptions = [
+  ["sessions_per_week", "Sessions / week"],
+  ["minutes_per_day", "Minutes / day"],
+  ["minutes_per_week", "Minutes / week"],
+  ["binary_days", "Days / week"],
+] as const satisfies readonly [TargetType, string][];
 
 export default function OnboardingScreen() {
   const bootstrap = useMutation(api.core.bootstrap);
-  const [selected, setSelected] = useState(0);
   const [values, setValues] = useState({
     focusName: "Study",
     monthlyBudget: "25000",
     preferredHour: "9",
     reflectionHour: "20",
+    targetType: "sessions_per_week" as TargetType,
     targetValue: "3",
   });
+  const setupRows = [
+    { icon: "heart-outline", label: "Focus area", value: values.focusName || "Study" },
+    { icon: "flag-outline", label: "Target", value: `${values.targetValue || "3"} ${targetOptions.find(([type]) => type === values.targetType)?.[1] ?? "sessions"}` },
+    { icon: "alarm-outline", label: "Preferred focus time", value: `${values.preferredHour || "9"}:00` },
+    { icon: "moon-outline", label: "Reflection time", value: `${values.reflectionHour || "20"}:00` },
+    { icon: "wallet-outline", label: "Monthly budget", value: values.monthlyBudget || "0" },
+  ] as const;
 
   async function startPlan() {
     await bootstrap({
@@ -41,6 +49,7 @@ export default function OnboardingScreen() {
       monthlyBudget: Number(values.monthlyBudget) || 0,
       preferredHour: Number(values.preferredHour) || 9,
       reflectionHour: Number(values.reflectionHour) || 20,
+      targetType: values.targetType,
       targetValue: Number(values.targetValue) || 3,
     });
     router.replace("/(tabs)/today");
@@ -70,8 +79,7 @@ export default function OnboardingScreen() {
             <Pressable
               accessibilityRole="button"
               key={row.label}
-              onPress={() => setSelected(index)}
-              style={[styles.setupRow, index === selected && styles.setupRowSelected]}
+              style={[styles.setupRow, index === 0 && styles.setupRowSelected]}
             >
               <Ionicons color={colors.primaryDark} name={row.icon} size={20} />
               <Text style={styles.setupLabel}>{row.label}</Text>
@@ -93,11 +101,21 @@ export default function OnboardingScreen() {
             accessibilityLabel="Weekly session target"
             keyboardType="number-pad"
             onChangeText={(targetValue) => setValues((current) => ({ ...current, targetValue }))}
-            placeholder="Sessions per week"
+            placeholder="Target value"
             placeholderTextColor={colors.muted}
             style={styles.input}
             value={values.targetValue}
           />
+          <View style={styles.chips}>
+            {targetOptions.map(([type, label]) => (
+              <Chip
+                key={type}
+                label={label}
+                selected={values.targetType === type}
+                onPress={() => setValues((current) => ({ ...current, targetType: type }))}
+              />
+            ))}
+          </View>
           <TextInput
             accessibilityLabel="Preferred focus hour"
             keyboardType="number-pad"
@@ -134,6 +152,14 @@ export default function OnboardingScreen() {
   );
 }
 
+function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   content: { padding: spacing.lg, paddingBottom: spacing.xl },
@@ -156,6 +182,11 @@ const styles = StyleSheet.create({
   setupLabel: { color: colors.text, flex: 1, fontSize: 14, marginLeft: spacing.sm },
   setupValue: { color: colors.muted, fontSize: 13 },
   form: { gap: spacing.sm, marginTop: spacing.md, padding: spacing.md },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
+  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
+  chipTextSelected: { color: colors.surface },
   input: {
     borderColor: colors.border,
     borderRadius: radii.control,
