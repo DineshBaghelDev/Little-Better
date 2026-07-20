@@ -21,3 +21,5 @@
 - Implemented category switching by creating a new active focus category, preserving old category history.
 - Reworked Calendar to use an anchored week with back/forward navigation, collapsed creation, tappable scheduled-task actions, explicit unscheduled-task time selection, and focus-session times.
 - Added Expo Notifications using SDK 57 docs, a persisted reminders toggle, local scheduling for upcoming tasks/focus/reflection/pending expense/weekly insight, and notification-response deep links via Expo Router.
+- Added structured text/voice capture previews for tasks with reminders, pending expenses, manual focus sessions, and bulk move-unfinished actions. Nothing from extracted text saves until Confirm all.
+- Changed manual Quick Add expenses to save confirmed immediately; extracted expenses remain pending previews.
