@@ -22,6 +22,7 @@
 - Reworked Calendar to use an anchored week with back/forward navigation, collapsed creation, tappable scheduled-task actions, explicit unscheduled-task time selection, and focus-session times.
 - Added Expo Notifications using SDK 57 docs, a persisted reminders toggle, local scheduling for upcoming tasks/focus/reflection/pending expense/weekly insight, and notification-response deep links via Expo Router.
 - Added structured text/voice capture previews for tasks with reminders, pending expenses, manual focus sessions, and bulk move-unfinished actions. Nothing from extracted text saves until Confirm all.
+- Added actual speech recognition to Voice capture with editable transcript fallback when permission or device support is unavailable.
 - Changed manual Quick Add expenses to save confirmed immediately; extracted expenses remain pending previews.
 - Added payment-notification detection with duplicate keys, pending review for successful detections, ignored failed/refunded detections, guessed categories, and visible source/resolution text in Money.
 - Added AsyncStorage-backed offline queue for task, manual expense, manual focus, and reflection capture; queued writes replay on app mount and every 15 seconds.

@@ -15,6 +15,13 @@
           "color": "#6D8B6A",
           "defaultChannel": "default"
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Little Better to capture voice notes.",
+          "speechRecognitionPermission": "Allow Little Better to turn speech into editable text."
+        }
       ]
     ],
     "ios": {
