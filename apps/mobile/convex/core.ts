@@ -114,6 +114,29 @@ const weeklyInsightPreview = v.object({
   suggestedAction: v.string(),
 });
 
+type WeeklyInsightPreviewResult = {
+  _id?: Doc<"weeklyInsights">["_id"];
+  actionHour?: number;
+  actionType?: "move_focus_reminder";
+  evidence: string;
+  observation: string;
+  status: Doc<"weeklyInsights">["status"];
+  suggestedAction: string;
+};
+
+function toWeeklyInsightPreview(insight: Doc<"weeklyInsights"> | null | undefined): WeeklyInsightPreviewResult | null {
+  if (!insight) return null;
+  return {
+    _id: insight._id,
+    actionHour: insight.actionHour,
+    actionType: insight.actionType,
+    evidence: insight.evidence,
+    observation: insight.observation,
+    status: insight.status,
+    suggestedAction: insight.suggestedAction,
+  };
+}
+
 const todayTaskTone = v.union(v.literal("normal"), v.literal("warning"));
 
 const todayItem = v.union(
@@ -190,7 +213,10 @@ function hourLabel(hour: number) {
   return `${display} ${suffix}`;
 }
 
-function computedFocusTimeInsight(focus: Doc<"focusCategories"> | null, sessions: Doc<"focusSessions">[]) {
+function computedFocusTimeInsight(
+  focus: Doc<"focusCategories"> | null,
+  sessions: Doc<"focusSessions">[],
+): { insight: WeeklyInsightPreviewResult | null; requirement: string | null } {
   if (!focus || sessions.length < 5) {
     return {
       insight: null,
@@ -592,7 +618,7 @@ export const insights = query({
         .sort((a, b) => b.amount - a.amount)
         .slice(0, 5),
       completedTasks: tasks.length,
-      currentInsight: currentInsight ?? dismissedInsight ?? computed.insight,
+      currentInsight: toWeeklyInsightPreview(currentInsight ?? dismissedInsight) ?? computed.insight,
       focusCategoryName: focus?.name ?? "Focus",
       focusMinutes,
       focusSessions: sessions.length,
