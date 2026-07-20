@@ -17,6 +17,7 @@ import { colors, radii, spacing } from "../src/theme";
 const types = [
   ["Task", "Action or to-do", "checkbox-outline", colors.lavenderSurface],
   ["Expense", "Spend or purchase", "cash-outline", colors.sageSurface],
+  ["Payment alert", "Detect pending spend", "receipt-outline", colors.coralSurface],
   ["Focus", "Start or log focus", "timer-outline", colors.lavenderSurface],
   ["Note", "Extract structured actions", "document-text-outline", colors.mustardSurface],
   ["Voice", "Confirm captured words", "mic-outline", colors.coralSurface],
@@ -95,6 +96,7 @@ export default function QuickAddModal() {
   const ensureMoneyDefaults = useMutation(api.core.ensureMoneyDefaults);
   const addTask = useMutation(api.core.addTask);
   const addExpense = useMutation(api.core.addExpense);
+  const detectPaymentNotification = useMutation(api.core.detectPaymentNotification);
   const removeCategory = useMutation(api.core.removeCategory);
   const addManualFocus = useMutation(api.core.addManualFocus);
   const moveUnfinishedTasks = useMutation(api.core.moveUnfinishedTasks);
@@ -206,6 +208,9 @@ export default function QuickAddModal() {
         note: task.note,
         title: task.title,
       }, addTask);
+    } else if (selected === "Payment alert") {
+      if (!text) return;
+      await detectPaymentNotification({ text });
     } else if (selected === "Note" || selected === "Voice") {
       if (!extracted.length) return;
       for (const action of extracted) {
@@ -374,6 +379,20 @@ export default function QuickAddModal() {
                   value={focusDuration.minutes}
                 />
               </View>
+            ) : selected === "Payment alert" ? (
+              <>
+                <TextInput
+                  accessibilityLabel="Payment notification text"
+                  autoFocus
+                  multiline
+                  onChangeText={setValue}
+                  placeholder="Paste a UPI or payment notification"
+                  placeholderTextColor={colors.muted}
+                  style={[styles.input, styles.captureInput]}
+                  value={value}
+                />
+                <Text style={styles.typeDetail}>Successful payments save as pending. Failed or refunded payments are ignored.</Text>
+              </>
             ) : (
               <>
                 {selected === "Voice" ? (
@@ -423,7 +442,7 @@ export default function QuickAddModal() {
                 ))}
               </>
             )}
-            <PrimaryButton label={selected === "Note" || selected === "Voice" ? "Confirm all" : selected === "Focus" || selected === "Expense" || selected === "Task" || value.trim() ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={save} />
+            <PrimaryButton label={selected === "Note" || selected === "Voice" ? "Confirm all" : selected === "Payment alert" ? "Detect payment" : selected === "Focus" || selected === "Expense" || selected === "Task" || value.trim() ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={save} />
             {syncMessage ? <Text style={styles.syncText}>{syncMessage}</Text> : null}
             <Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={styles.changeType}>
               <Text style={styles.changeTypeText}>Choose another type</Text>

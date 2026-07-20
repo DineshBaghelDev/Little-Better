@@ -292,6 +292,7 @@ export const bootstrap = mutation({
     await ctx.db.insert("appSettings", {
       focusCategoryId: categoryId,
       monthlyBudget: Math.max(0, args.monthlyBudget),
+      notificationsEnabled: args.notificationsEnabled,
       onboardedAt: now,
       reflectionHour: Math.max(17, Math.min(23, Math.round(args.reflectionHour))),
     });
