@@ -1,9 +1,33 @@
-import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { ConvexProvider, ConvexReactClient, useMutation } from "convex/react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { PropsWithChildren, useMemo } from "react";
+import { PropsWithChildren, useEffect, useMemo } from "react";
 
+import { api } from "../convex/_generated/api";
+import { flushOfflineQueue } from "../src/offlineQueue";
 import { colors } from "../src/theme";
+import { useNotificationObserver } from "../src/notifications";
+
+function OfflineSync() {
+  const addTask = useMutation(api.core.addTask);
+  const addExpense = useMutation(api.core.addExpense);
+  const addManualFocus = useMutation(api.core.addManualFocus);
+  const addReflection = useMutation(api.core.addReflection);
+
+  useEffect(() => {
+    const flush = () => flushOfflineQueue({
+      addExpense,
+      addManualFocus,
+      addReflection,
+      addTask,
+    });
+    void flush();
+    const timer = setInterval(() => void flush(), 15000);
+    return () => clearInterval(timer);
+  }, [addExpense, addManualFocus, addReflection, addTask]);
+
+  return null;
+}
 
 function OptionalConvexProvider({ children }: PropsWithChildren) {
   const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
@@ -16,6 +40,8 @@ function OptionalConvexProvider({ children }: PropsWithChildren) {
 }
 
 export default function RootLayout() {
+  useNotificationObserver();
+
   return (
     <OptionalConvexProvider>
       <Stack
@@ -28,7 +54,9 @@ export default function RootLayout() {
         <Stack.Screen name="focus" options={{ presentation: "fullScreenModal" }} />
         <Stack.Screen name="quick-add" options={{ presentation: "transparentModal" }} />
         <Stack.Screen name="reflection" options={{ presentation: "modal" }} />
+        <Stack.Screen name="settings" options={{ presentation: "modal" }} />
       </Stack>
+      <OfflineSync />
       <StatusBar style="dark" />
     </OptionalConvexProvider>
   );

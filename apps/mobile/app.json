@@ -8,7 +8,21 @@
     "userInterfaceStyle": "light",
     "scheme": "littlebetter",
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "color": "#6D8B6A",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Little Better to capture voice notes.",
+          "speechRecognitionPermission": "Allow Little Better to turn speech into editable text."
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true

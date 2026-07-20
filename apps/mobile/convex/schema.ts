@@ -7,6 +7,7 @@ export default defineSchema({
     location: v.optional(v.string()),
     meetingLink: v.optional(v.string()),
     note: v.optional(v.string()),
+    reminderLeadMinutes: v.optional(v.number()),
     title: v.string(),
     status: v.union(v.literal("planned"), v.literal("done")),
     scheduledAt: v.optional(v.number()),
@@ -37,10 +38,14 @@ export default defineSchema({
     accountId: v.optional(v.id("accounts")),
     amount: v.number(),
     category: v.string(),
+    detectionKey: v.optional(v.string()),
     merchant: v.optional(v.string()),
     note: v.optional(v.string()),
     occurredAt: v.number(),
     paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("online"))),
+    rawText: v.optional(v.string()),
+    resolution: v.optional(v.union(v.literal("failed"), v.literal("refunded"), v.literal("duplicate"))),
+    source: v.optional(v.union(v.literal("manual"), v.literal("text"), v.literal("notification"), v.literal("import"))),
     status: v.union(
       v.literal("pending"),
       v.literal("confirmed"),
@@ -49,7 +54,8 @@ export default defineSchema({
     type: v.optional(v.union(v.literal("expense"), v.literal("income"))),
   })
     .index("by_status", ["status"])
-    .index("by_status_and_occurredAt", ["status", "occurredAt"]),
+    .index("by_status_and_occurredAt", ["status", "occurredAt"])
+    .index("by_detectionKey", ["detectionKey"]),
   accounts: defineTable({
     archived: v.optional(v.boolean()),
     balance: v.number(),
@@ -64,6 +70,12 @@ export default defineSchema({
     reflectedAt: v.number(),
     tags: v.array(v.string()),
   }).index("by_reflectedAt", ["reflectedAt"]),
+  reflectionDismissals: defineTable({
+    action: v.union(v.literal("skip"), v.literal("snooze")),
+    createdAt: v.number(),
+    dateKey: v.string(),
+    snoozeUntil: v.optional(v.number()),
+  }).index("by_dateKey", ["dateKey"]),
   activeTimers: defineTable({
     categoryId: v.id("focusCategories"),
     elapsedSeconds: v.number(),
@@ -73,13 +85,18 @@ export default defineSchema({
   appSettings: defineTable({
     focusCategoryId: v.id("focusCategories"),
     monthlyBudget: v.number(),
+    notificationsEnabled: v.optional(v.boolean()),
     onboardedAt: v.number(),
     reflectionHour: v.number(),
   }),
   weeklyInsights: defineTable({
+    actionHour: v.optional(v.number()),
+    actionType: v.optional(v.literal("move_focus_reminder")),
+    appliedAt: v.optional(v.number()),
     createdAt: v.number(),
     evidence: v.string(),
     observation: v.string(),
+    previousHour: v.optional(v.number()),
     status: v.union(
       v.literal("new"),
       v.literal("applied"),

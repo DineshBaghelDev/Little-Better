@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
-import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
 import { PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
@@ -36,17 +37,49 @@ export default function ProgressScreen() {
   const [preset, setPreset] = useState<RangePreset>("week");
   const [customFrom, setCustomFrom] = useState(dateInput(Date.now() - 6 * DAY));
   const [customTo, setCustomTo] = useState(dateInput(Date.now()));
-  const [computedInsight, setComputedInsight] = useState<"new" | "applied" | "dismissed">("new");
+  const [editingInsight, setEditingInsight] = useState(false);
+  const [editHour, setEditHour] = useState("");
   const range = useMemo(() => rangeFor(preset, customFrom, customTo), [customFrom, customTo, preset]);
   const insights = useQuery(api.core.insights, range);
+  const applyWeeklyInsight = useMutation(api.core.applyWeeklyInsight);
+  const dismissWeeklyInsight = useMutation(api.core.dismissWeeklyInsight);
   const setWeeklyInsightStatus = useMutation(api.core.setWeeklyInsightStatus);
+  const undoWeeklyInsight = useMutation(api.core.undoWeeklyInsight);
   const currentInsight = insights?.currentInsight;
-  const currentInsightStatus = currentInsight?._id ? currentInsight.status : computedInsight;
+  const currentInsightStatus = currentInsight?.status;
   const maxCategory = Math.max(1, ...(insights?.categorySummary.map((item) => item.amount) ?? [1]));
 
-  async function setInsightStatus(status: "new" | "applied" | "dismissed") {
-    if (currentInsight?._id) await setWeeklyInsightStatus({ insightId: currentInsight._id, status });
-    else setComputedInsight(status);
+  useEffect(() => {
+    setEditHour(currentInsight?.actionHour === undefined ? "" : String(currentInsight.actionHour));
+    setEditingInsight(false);
+  }, [currentInsight?.actionHour, currentInsight?.observation]);
+
+  async function applyInsight() {
+    if (!currentInsight) return;
+    const actionHour = Number(editHour || currentInsight.actionHour);
+    if (!Number.isFinite(actionHour)) return;
+    await applyWeeklyInsight({
+      actionHour,
+      evidence: currentInsight.evidence,
+      insightId: currentInsight._id,
+      observation: currentInsight.observation,
+      suggestedAction: currentInsight.suggestedAction,
+    });
+  }
+
+  async function dismissInsight() {
+    if (!currentInsight) return;
+    await dismissWeeklyInsight({
+      actionHour: currentInsight.actionHour,
+      evidence: currentInsight.evidence,
+      insightId: currentInsight._id,
+      observation: currentInsight.observation,
+      suggestedAction: currentInsight.suggestedAction,
+    });
+  }
+
+  async function restoreDismissed(insightId?: Id<"weeklyInsights">) {
+    if (insightId) await setWeeklyInsightStatus({ insightId, status: "new" });
   }
 
   return (
@@ -88,38 +121,50 @@ export default function ProgressScreen() {
             <Ionicons color={colors.primaryDark} name="bulb-outline" size={24} />
             <View style={styles.grow}>
               <Text style={styles.suggestionTitle}>{currentInsight.suggestedAction}</Text>
-              <Text style={styles.meta}>Apply keeps it visible here with Undo.</Text>
+              <Text style={styles.meta}>Apply updates your focus reminder and keeps Undo here.</Text>
             </View>
           </Surface>
+          {editingInsight ? (
+            <TextInput
+              accessibilityLabel="Suggested focus reminder hour"
+              keyboardType="number-pad"
+              onChangeText={setEditHour}
+              placeholder="Hour, 0 to 23"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+              value={editHour}
+            />
+          ) : null}
           <View style={styles.actions}>
-            <View style={styles.grow}><PrimaryButton label="Apply" onPress={() => setInsightStatus("applied")} /></View>
-            <View style={styles.grow}><PrimaryButton label="Dismiss" onPress={() => setInsightStatus("dismissed")} secondary /></View>
+            <View style={styles.grow}><PrimaryButton label="Apply" onPress={applyInsight} /></View>
+            <View style={styles.grow}><PrimaryButton label="Edit" onPress={() => setEditingInsight((open) => !open)} secondary /></View>
+            <View style={styles.grow}><PrimaryButton label="Dismiss" onPress={dismissInsight} secondary /></View>
           </View>
         </View>
       ) : currentInsight && currentInsightStatus === "dismissed" ? (
         <Surface style={styles.emptyInsight}>
           <Text style={styles.suggestionTitle}>Insight dismissed</Text>
-          <Pressable accessibilityRole="button" onPress={() => setInsightStatus("new")}>
+          <Pressable accessibilityRole="button" onPress={() => restoreDismissed(currentInsight._id)}>
             <Text style={styles.undo}>Undo</Text>
           </Pressable>
         </Surface>
       ) : !currentInsight ? (
         <Surface style={styles.emptyInsight}>
           <Text style={styles.suggestionTitle}>Not enough data yet</Text>
-          <Text style={styles.meta}>Record at least 5 focus sessions for a weekly insight.</Text>
+          <Text style={styles.meta}>{insights?.insightRequirement ?? "Record 5 focus sessions for a weekly insight."}</Text>
         </Surface>
       ) : null}
 
-      {(currentInsight && currentInsightStatus === "applied") || insights?.appliedInsight ? (
+      {insights?.appliedInsight ? (
         <>
           <SectionLabel>Applied change</SectionLabel>
           <Surface style={styles.applied}>
             <Ionicons color={colors.primaryDark} name="calendar-outline" size={24} />
             <View style={styles.grow}>
-              <Text style={styles.suggestionTitle}>{(currentInsightStatus === "applied" ? currentInsight?.suggestedAction : insights?.appliedInsight?.suggestedAction) ?? "Weekly change"}</Text>
+              <Text style={styles.suggestionTitle}>{insights.appliedInsight.suggestedAction}</Text>
               <Text style={styles.meta}>Visible and reversible</Text>
             </View>
-            <Pressable accessibilityRole="button" onPress={() => setInsightStatus("new")}>
+            <Pressable accessibilityRole="button" onPress={() => undoWeeklyInsight({ insightId: insights.appliedInsight._id })}>
               <Text style={styles.undo}>Undo</Text>
             </Pressable>
           </Surface>
@@ -168,7 +213,7 @@ function Stat({ color, detail, label, value }: { color: string; detail: string; 
   return (
     <View style={[styles.stat, { backgroundColor: color }]}>
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
+      <Text adjustsFontSizeToFit numberOfLines={1} style={styles.statValue}>{value}</Text>
       <Text style={styles.meta}>{detail}</Text>
     </View>
   );
@@ -193,6 +238,7 @@ const styles = StyleSheet.create({
   suggestionTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
   grow: { flex: 1 },
   actions: { flexDirection: "row", gap: spacing.sm },
+  input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 15, minHeight: 48, paddingHorizontal: spacing.md },
   applied: { alignItems: "center", flexDirection: "row", gap: spacing.md, padding: spacing.md },
   emptyInsight: { gap: spacing.sm, padding: spacing.md },
   undo: { color: colors.primaryDark, fontSize: 14, fontWeight: "700", minHeight: 44, paddingTop: 12 },
