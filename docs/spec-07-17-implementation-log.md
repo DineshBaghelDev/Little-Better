@@ -24,3 +24,5 @@
 - Added structured text/voice capture previews for tasks with reminders, pending expenses, manual focus sessions, and bulk move-unfinished actions. Nothing from extracted text saves until Confirm all.
 - Changed manual Quick Add expenses to save confirmed immediately; extracted expenses remain pending previews.
 - Added payment-notification detection with duplicate keys, pending review for successful detections, ignored failed/refunded detections, guessed categories, and visible source/resolution text in Money.
+- Added AsyncStorage-backed offline queue for task, manual expense, manual focus, and reflection capture; queued writes replay on app mount and every 15 seconds.
+- Added local focus timer persistence so an offline timer survives navigation/restart and appears as Today rank 1 until ended and replayed as a focus session.

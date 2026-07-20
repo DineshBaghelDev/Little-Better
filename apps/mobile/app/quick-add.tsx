@@ -10,6 +10,7 @@ import { Id } from "../convex/_generated/dataModel";
 import { CategoryDropdown } from "../src/components/CategoryDropdown";
 import { DatePickerField, dateInput } from "../src/components/DatePickerField";
 import { PrimaryButton, Surface } from "../src/components/ui";
+import { enqueueOffline } from "../src/offlineQueue";
 import { colors, radii, spacing } from "../src/theme";
 
 const types = [
@@ -113,6 +114,7 @@ export default function QuickAddModal() {
   const [task, setTask] = useState({ location: "", meetingLink: "", note: "", title: "" });
   const [value, setValue] = useState("");
   const [extracted, setExtracted] = useState<ExtractedAction[]>([]);
+  const [syncMessage, setSyncMessage] = useState("");
 
   useEffect(() => {
     void ensureMoneyDefaults({});
@@ -123,20 +125,32 @@ export default function QuickAddModal() {
     return year && month && day ? new Date(year, month - 1, day).getTime() : undefined;
   }
 
+  async function saveOrQueue(type: "addTask" | "addExpense" | "addManualFocus", payload: any, saveNow: (payload: any) => Promise<unknown>) {
+    try {
+      await saveNow(payload);
+      return false;
+    } catch {
+      await enqueueOffline(type, payload);
+      setSyncMessage("Saved offline. It will sync when the app reconnects.");
+      return true;
+    }
+  }
+
   async function save() {
     const text = value.trim();
+    let queued = false;
     if (selected === "Focus") {
       const minutes = (Number(focusDuration.hours) || 0) * 60 + (Number(focusDuration.minutes) || 0);
-      if (minutes > 0) await addManualFocus({ minutes });
+      if (minutes > 0) queued = await saveOrQueue("addManualFocus", { minutes }, addManualFocus);
       else await startFocus({});
-      router.back();
+      if (!queued) router.back();
       return;
     }
     if (selected === "Expense") {
       const amount = Number(expense.amount);
       const accountId = expense.accountId ?? money?.accounts[0]?._id;
       if (!Number.isFinite(amount) || amount <= 0 || !accountId) return;
-      await addExpense({
+      queued = await saveOrQueue("addExpense", {
         accountId,
         amount,
         category: expense.category || "General",
@@ -147,22 +161,22 @@ export default function QuickAddModal() {
         source: "manual",
         status: "confirmed",
         type: expense.type,
-      });
+      }, addExpense);
     } else if (selected === "Task") {
       if (!task.title.trim()) return;
-      await addTask({
+      queued = await saveOrQueue("addTask", {
         location: task.location,
         meetingLink: task.meetingLink,
         note: task.note,
         title: task.title,
-      });
+      }, addTask);
     } else if (selected === "Note" || selected === "Voice") {
       if (!extracted.length) return;
       for (const action of extracted) {
         if (action.type === "expense") {
           const amount = Number(action.amount);
           const accountId = expense.accountId ?? money?.accounts[0]?._id;
-          if (Number.isFinite(amount) && amount > 0 && accountId) await addExpense({
+          if (Number.isFinite(amount) && amount > 0 && accountId) queued = (await saveOrQueue("addExpense", {
             accountId,
             amount,
             category: action.category || "General",
@@ -172,21 +186,21 @@ export default function QuickAddModal() {
             source: "text",
             status: "pending",
             type: "expense",
-          });
+          }, addExpense)) || queued;
         }
         if (action.type === "focus") {
           const minutes = Number(action.minutes);
-          if (Number.isFinite(minutes) && minutes > 0) await addManualFocus({ minutes });
+          if (Number.isFinite(minutes) && minutes > 0) queued = (await saveOrQueue("addManualFocus", { minutes }, addManualFocus)) || queued;
         }
         if (action.type === "task" && action.title.trim()) {
           const scheduledAt = Number(action.scheduledAt);
           const reminderLeadMinutes = Number(action.reminderLeadMinutes);
-          await addTask({
+          queued = (await saveOrQueue("addTask", {
             note: "",
             reminderLeadMinutes: Number.isFinite(reminderLeadMinutes) ? reminderLeadMinutes : undefined,
             scheduledAt: Number.isFinite(scheduledAt) ? scheduledAt : undefined,
             title: action.title,
-          });
+          }, addTask)) || queued;
         }
         if (action.type === "move") {
           const scheduledAt = Number(action.scheduledAt);
@@ -195,9 +209,9 @@ export default function QuickAddModal() {
       }
     } else {
       if (!text) return;
-      await addTask({ title: text });
+      queued = await saveOrQueue("addTask", { title: text }, addTask);
     }
-    router.back();
+    if (!queued) router.back();
   }
 
   return (
@@ -367,6 +381,7 @@ export default function QuickAddModal() {
               </>
             )}
             <PrimaryButton label={selected === "Note" || selected === "Voice" ? "Confirm all" : selected === "Focus" || selected === "Expense" || selected === "Task" || value.trim() ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={save} />
+            {syncMessage ? <Text style={styles.syncText}>{syncMessage}</Text> : null}
             <Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={styles.changeType}>
               <Text style={styles.changeTypeText}>Choose another type</Text>
             </Pressable>
@@ -416,6 +431,7 @@ const styles = StyleSheet.create({
   warning: { color: colors.coral, fontSize: 12, fontWeight: "700" },
   removePreview: { minHeight: 44, justifyContent: "center" },
   removePreviewText: { color: colors.coral, fontSize: 14, fontWeight: "700" },
+  syncText: { color: colors.primaryDark, fontSize: 13, fontWeight: "600", textAlign: "center" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   inline: { flexDirection: "row", gap: spacing.sm },
   chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },

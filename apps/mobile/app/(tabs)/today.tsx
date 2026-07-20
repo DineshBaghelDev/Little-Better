@@ -9,6 +9,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import { Screen } from "../../src/components/Screen";
 import { Mascot, PrimaryButton, Surface } from "../../src/components/ui";
 import { scheduleLocalNotifications } from "../../src/notifications";
+import { readLocalTimer, type LocalTimer } from "../../src/offlineQueue";
 import { colors, radii, spacing } from "../../src/theme";
 
 function moneyText(value: number) {
@@ -41,6 +42,7 @@ export default function TodayTabScreen() {
   const [detailsOpen, setDetailsOpen] = useState<string | null>(null);
   const [laterOpen, setLaterOpen] = useState(false);
   const [lastCompleted, setLastCompleted] = useState<Id<"tasks"> | null>(null);
+  const [localTimer, setLocalTimer] = useState<LocalTimer | null>(null);
 
   async function startFocusSession() {
     await startFocus({});
@@ -57,6 +59,10 @@ export default function TodayTabScreen() {
     await undoCompleteTask({ taskId: lastCompleted });
     setLastCompleted(null);
   }
+
+  useEffect(() => {
+    readLocalTimer().then(setLocalTimer);
+  }, []);
 
   useEffect(() => {
     if (!today?.settings?.notificationsEnabled) return;
@@ -159,6 +165,19 @@ export default function TodayTabScreen() {
       ))}
 
       <View style={styles.cardStack}>
+        {localTimer && !today?.activeTimer ? (
+          <Surface style={styles.priorityCard}>
+            <Rank value={1} />
+            <View style={styles.grow}>
+              <Text style={styles.reason}>Active offline</Text>
+              <Text style={styles.cardTitle}>{localTimer.categoryName} session</Text>
+              <Text style={styles.meta}>{localTimer.status === "paused" ? "Paused" : "Running"} locally</Text>
+            </View>
+            <Pressable accessibilityRole="button" onPress={() => router.push("/focus")} style={styles.roundAction}>
+              <Ionicons color={colors.primary} name="timer-outline" size={21} />
+            </Pressable>
+          </Surface>
+        ) : null}
         {today?.rankedItems.map((item) => {
           if (item.kind === "timer") {
             return (
