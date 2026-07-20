@@ -8,11 +8,13 @@ type Category = { _id: string; name: string };
 
 export function CategoryDropdown({
   categories,
+  manageable = true,
   onDelete,
   onSelect,
   selected,
 }: {
   categories: Category[];
+  manageable?: boolean;
   onDelete: (id: string) => void;
   onSelect: (name: string) => void;
   selected: string;
@@ -47,11 +49,13 @@ export function CategoryDropdown({
                 {selected === category.name ? <Ionicons color={colors.primaryDark} name="checkmark" size={20} /> : null}
               </Pressable>
             ))}
-            <Pressable accessibilityRole="button" onPress={() => setManaging((value) => !value)} style={styles.manageToggle}>
-              <Ionicons color={colors.coral} name={managing ? "close" : "trash-outline"} size={18} />
-              <Text style={styles.manageText}>{managing ? "Done managing" : "Manage categories"}</Text>
-            </Pressable>
-            {managing ? (
+            {manageable ? (
+              <Pressable accessibilityRole="button" onPress={() => setManaging((value) => !value)} style={styles.manageToggle}>
+                <Ionicons color={colors.coral} name={managing ? "close" : "trash-outline"} size={18} />
+                <Text style={styles.manageText}>{managing ? "Done managing" : "Manage categories"}</Text>
+              </Pressable>
+            ) : null}
+            {manageable && managing ? (
               <View style={styles.manageList}>
                 {categories.map((category) => (
                   <View key={`manage-${category._id}`} style={styles.manageRow}>

@@ -30,23 +30,13 @@ function parseDate(value: string) {
 
 export default function MoneyScreen() {
   const ensureMoneyDefaults = useMutation(api.core.ensureMoneyDefaults);
-  const addExpense = useMutation(api.core.addExpense);
-  const addCategory = useMutation(api.core.addCategory);
-  const removeCategory = useMutation(api.core.removeCategory);
-  const addAccount = useMutation(api.core.addAccount);
-  const updateAccount = useMutation(api.core.updateAccount);
-  const archiveAccount = useMutation(api.core.archiveAccount);
   const updateTransaction = useMutation(api.core.updateTransaction);
   const removeTransaction = useMutation(api.core.removeTransaction);
-  const [selectedAccount, setSelectedAccount] = useState<Id<"accounts"> | undefined>();
+  const money = useQuery(api.core.money, {});
+  const [deeperOpen, setDeeperOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Id<"transactions"> | null>(null);
-  const money = useQuery(api.core.money, selectedAccount ? { accountId: selectedAccount } : {});
-  const [newCategory, setNewCategory] = useState("");
-  const [showCategoryForm, setShowCategoryForm] = useState(false);
-  const [showAccountForm, setShowAccountForm] = useState(false);
-  const [accountForm, setAccountForm] = useState({ balance: "", name: "" });
-  const [editingAccount, setEditingAccount] = useState<Id<"accounts"> | null>(null);
   const [expense, setExpense] = useState({
+    accountId: undefined as Id<"accounts"> | undefined,
     amount: "",
     category: "Food",
     date: dateInput(Date.now()),
@@ -59,7 +49,8 @@ export default function MoneyScreen() {
   const categories = money?.categories.filter((item) => item.type === expense.type) ?? [];
   const budget = money?.budget ?? 0;
   const spent = money?.spent ?? 0;
-  const remaining = Math.max(0, budget - spent);
+  const remaining = budget - spent;
+  const overBudget = budget > 0 && remaining < 0;
   const progress = budget ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
   const maxSummary = Math.max(1, ...(money?.summary.map((item) => item.amount) ?? [1]));
 
@@ -67,31 +58,10 @@ export default function MoneyScreen() {
     void ensureMoneyDefaults({});
   }, [ensureMoneyDefaults]);
 
-  async function saveTransaction() {
-    const amount = Number(expense.amount);
-    const accountId = selectedAccount ?? money?.accounts[0]?._id;
-    const category = expense.category || categories[0]?.name || "General";
-    if (!Number.isFinite(amount) || amount <= 0 || !accountId) return;
-    const payload = {
-      accountId,
-      amount,
-      category,
-      merchant: expense.merchant,
-      note: expense.note,
-      occurredAt: parseDate(expense.date),
-      paymentMethod: expense.paymentMethod,
-      status: expense.status,
-      type: expense.type,
-    };
-    if (editingTransaction) await updateTransaction({ ...payload, transactionId: editingTransaction });
-    else await addExpense(payload);
-    resetTransaction();
-  }
-
   function editTransaction(transaction: Doc<"transactions">) {
     setEditingTransaction(transaction._id);
-    setSelectedAccount(transaction.accountId);
     setExpense({
+      accountId: transaction.accountId,
       amount: String(transaction.amount),
       category: transaction.category,
       date: dateInput(transaction.occurredAt),
@@ -112,7 +82,26 @@ export default function MoneyScreen() {
     setExpense((current) => ({ ...current, category: type === "income" ? "Salary" : "Food", type }));
   }
 
-  function transactionFields(showStatus = false) {
+  async function saveTransaction() {
+    if (!editingTransaction) return;
+    const amount = Number(expense.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    await updateTransaction({
+      accountId: expense.accountId,
+      amount,
+      category: expense.category || categories[0]?.name || "General",
+      merchant: expense.merchant,
+      note: expense.note,
+      occurredAt: parseDate(expense.date),
+      paymentMethod: expense.paymentMethod,
+      status: expense.status,
+      transactionId: editingTransaction,
+      type: expense.type,
+    });
+    resetTransaction();
+  }
+
+  function transactionFields() {
     return (
       <>
         <View style={styles.chips}>
@@ -121,18 +110,17 @@ export default function MoneyScreen() {
           <Chip label="Online" selected={expense.paymentMethod === "online"} onPress={() => setExpense((current) => ({ ...current, paymentMethod: "online" }))} />
           <Chip label="Cash" selected={expense.paymentMethod === "cash"} onPress={() => setExpense((current) => ({ ...current, paymentMethod: "cash" }))} />
         </View>
-        {showStatus ? (
-          <View style={styles.chips}>
-            {statusOptions.map((option) => (
-              <Chip key={option.value} label={option.label} selected={expense.status === option.value} onPress={() => setExpense((current) => ({ ...current, status: option.value }))} />
-            ))}
-          </View>
-        ) : null}
+        <View style={styles.chips}>
+          {statusOptions.map((option) => (
+            <Chip key={option.value} label={option.label} selected={expense.status === option.value} onPress={() => setExpense((current) => ({ ...current, status: option.value }))} />
+          ))}
+        </View>
         <TextInput accessibilityLabel="Amount" keyboardType="decimal-pad" onChangeText={(amount) => setExpense((current) => ({ ...current, amount }))} placeholder="Amount" placeholderTextColor={colors.muted} style={styles.input} value={expense.amount} />
         <TextInput accessibilityLabel="Merchant or payer" onChangeText={(merchant) => setExpense((current) => ({ ...current, merchant }))} placeholder={expense.type === "income" ? "Payer (optional)" : "Merchant (optional)"} placeholderTextColor={colors.muted} style={styles.input} value={expense.merchant} />
         <CategoryDropdown
           categories={categories}
-          onDelete={(categoryId) => removeCategory({ categoryId: categoryId as Id<"transactionCategories"> })}
+          manageable={false}
+          onDelete={() => undefined}
           onSelect={(category) => setExpense((current) => ({ ...current, category }))}
           selected={expense.category}
         />
@@ -142,135 +130,39 @@ export default function MoneyScreen() {
     );
   }
 
-  async function saveCategory() {
-    const name = newCategory.trim();
-    if (!name) return;
-    await addCategory({ name, type: expense.type });
-    setExpense((current) => ({ ...current, category: name }));
-    setNewCategory("");
-    setShowCategoryForm(false);
-  }
-
-  async function saveAccount() {
-    const name = accountForm.name.trim();
-    const balance = Number(accountForm.balance) || 0;
-    if (!name) return;
-    if (editingAccount) await updateAccount({ accountId: editingAccount, balance, name });
-    else await addAccount({ balance, name });
-    setAccountForm({ balance: "", name: "" });
-    setEditingAccount(null);
-    setShowAccountForm(false);
-  }
-
   return (
     <Screen
       headerAction={<Ionicons color={colors.text} name="wallet-outline" size={24} />}
-      subtitle="Accounts, transactions, and category totals"
+      subtitle="Budget, pending confirmations, and recent spend"
       title="Money"
     >
-      <View style={styles.budget}>
-        <Text style={styles.budgetLabel}>Net worth</Text>
-        <Text style={styles.amount}>{moneyText(money?.netWorth ?? 0)}</Text>
-        <View style={styles.amountRow}>
-          <Text style={styles.budgetLabel}>Budget remaining</Text>
-          <Text style={styles.ofAmount}>{moneyText(remaining)} of {moneyText(budget)}</Text>
+      <View style={[styles.budget, overBudget && styles.budgetOver]}>
+        <Text style={styles.budgetLabel}>Budget remaining</Text>
+        <Text style={[styles.amount, overBudget && styles.overText]}>
+          {overBudget ? `${moneyText(Math.abs(remaining))} over` : moneyText(Math.max(0, remaining))}
+        </Text>
+        <Text style={[styles.used, overBudget && styles.overText]}>
+          {moneyText(spent)} confirmed of {moneyText(budget)} this month
+        </Text>
+        <View style={styles.track}>
+          <View style={[styles.progress, overBudget && styles.progressOver, { width: `${progress}%` as `${number}%` }]} />
         </View>
-        <View style={styles.track}><View style={[styles.progress, { width: `${progress}%` as `${number}%` }]} /></View>
-        <Text style={styles.used}>{moneyText(spent)} confirmed expenses this month</Text>
       </View>
-
-      <SectionLabel>Filter account</SectionLabel>
-      <View style={styles.chips}>
-        <Chip label="All" selected={!selectedAccount} onPress={() => setSelectedAccount(undefined)} />
-        {(money?.accounts ?? []).map((account) => (
-          <Chip key={account._id} label={`${account.name} · ${moneyText(account.balance)}`} selected={selectedAccount === account._id} onPress={() => setSelectedAccount(account._id)} />
-        ))}
-      </View>
-
-      <SectionLabel>Add transaction</SectionLabel>
-      <Surface style={[styles.form, styles.transactionForm]}>
-        {transactionFields()}
-        <Pressable accessibilityRole="button" onPress={() => setShowCategoryForm((open) => !open)} style={styles.categoryToggle}>
-          <Ionicons color={colors.primaryDark} name={showCategoryForm ? "remove" : "add"} size={20} />
-          <Text style={styles.categoryToggleText}>{showCategoryForm ? "Close category form" : "Add category"}</Text>
-        </Pressable>
-        {showCategoryForm ? (
-          <View style={styles.inline}>
-            <TextInput accessibilityLabel="New category" onChangeText={setNewCategory} placeholder="New category" placeholderTextColor={colors.muted} style={[styles.input, styles.grow]} value={newCategory} />
-            <Pressable accessibilityLabel="Save category" accessibilityRole="button" onPress={saveCategory} style={styles.iconButton}>
-              <Ionicons color={colors.primaryDark} name="checkmark" size={22} />
-            </Pressable>
-          </View>
-        ) : null}
-        <Pressable accessibilityRole="button" onPress={saveTransaction} style={styles.addButton}>
-          <Text style={styles.addButtonText}>Save transaction</Text>
-        </Pressable>
-      </Surface>
-
-      <SectionLabel>Accounts</SectionLabel>
-      <Surface>
-        {(money?.accounts ?? []).map((account) => (
-          <View key={account._id} style={styles.accountRow}>
-            <View style={styles.grow}>
-              <Text style={styles.transactionTitle}>{account.name}</Text>
-              <Text style={styles.meta}>{moneyText(account.balance)}</Text>
-            </View>
-            <Pressable accessibilityRole="button" onPress={() => {
-              setEditingAccount(account._id);
-              setAccountForm({ balance: String(account.baseBalance), name: account.name });
-              setShowAccountForm(true);
-            }} style={styles.iconButton}>
-              <Ionicons color={colors.primaryDark} name="create-outline" size={20} />
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => archiveAccount({ accountId: account._id })} style={styles.iconButton}>
-              <Ionicons color={colors.coral} name="trash-outline" size={20} />
-            </Pressable>
-          </View>
-        ))}
-        <Pressable accessibilityRole="button" onPress={() => {
-          setShowAccountForm((open) => !open);
-          setEditingAccount(null);
-          setAccountForm({ balance: "", name: "" });
-        }} style={styles.accountToggle}>
-          <Ionicons color={colors.primaryDark} name={showAccountForm ? "remove" : "add"} size={21} />
-          <Text style={styles.accountToggleText}>{showAccountForm ? "Close account form" : "Add wallet"}</Text>
-        </Pressable>
-        {showAccountForm ? (
-          <View style={styles.form}>
-            <TextInput accessibilityLabel="Account name" onChangeText={(name) => setAccountForm((current) => ({ ...current, name }))} placeholder="Account name" placeholderTextColor={colors.muted} style={styles.input} value={accountForm.name} />
-            <TextInput accessibilityLabel="Starting balance" keyboardType="decimal-pad" onChangeText={(balance) => setAccountForm((current) => ({ ...current, balance }))} placeholder="Starting balance" placeholderTextColor={colors.muted} style={styles.input} value={accountForm.balance} />
-            <Pressable accessibilityRole="button" onPress={saveAccount} style={styles.addButton}>
-              <Text style={styles.addButtonText}>{editingAccount ? "Save account" : "Add account"}</Text>
-            </Pressable>
-          </View>
-        ) : null}
-      </Surface>
 
       {money?.pending.length ? (
         <>
           <SectionLabel>Pending confirmation</SectionLabel>
           <Surface>
             {money.pending.map((transaction) => (
-              <View key={transaction._id} style={styles.pending}>
-                <View style={styles.grow}>
-                  <Text style={styles.transactionTitle}>{transaction.merchant || transaction.category}</Text>
-                  <Text style={styles.meta}>{new Date(transaction.occurredAt).toLocaleDateString()} · {transaction.paymentMethod ?? "online"}</Text>
-                  {transaction.note ? <Text style={styles.meta}>{transaction.note}</Text> : null}
-                </View>
-                <Text style={styles.transactionTitle}>{moneyText(transaction.amount)}</Text>
-                <Pressable accessibilityLabel={`Edit ${transaction.category} transaction`} accessibilityRole="button" onPress={() => editTransaction(transaction)} style={styles.iconButton}>
-                  <Ionicons color={colors.primaryDark} name="create-outline" size={20} />
-                </Pressable>
-                <Pressable accessibilityLabel={`Confirm ${transaction.category} transaction`} accessibilityRole="button" onPress={() => updateTransaction({ status: "confirmed", transactionId: transaction._id })} style={styles.confirm}>
-                  <Ionicons color={colors.surface} name="checkmark" size={20} />
-                </Pressable>
-                <Pressable accessibilityLabel={`Ignore ${transaction.category} transaction`} accessibilityRole="button" onPress={() => updateTransaction({ status: "ignored", transactionId: transaction._id })} style={styles.iconButton}>
-                  <Ionicons color={colors.coral} name="close" size={20} />
-                </Pressable>
-                <Pressable accessibilityLabel={`Delete ${transaction.category} transaction`} accessibilityRole="button" onPress={() => removeTransaction({ transactionId: transaction._id })} style={styles.iconButton}>
-                  <Ionicons color={colors.coral} name="trash-outline" size={20} />
-                </Pressable>
-              </View>
+              <TransactionRow
+                key={transaction._id}
+                transaction={transaction}
+                onConfirm={() => updateTransaction({ status: "confirmed", transactionId: transaction._id })}
+                onEdit={() => editTransaction(transaction)}
+                onIgnore={() => updateTransaction({ status: "ignored", transactionId: transaction._id })}
+                onRemove={() => removeTransaction({ transactionId: transaction._id })}
+                pending
+              />
             ))}
           </Surface>
         </>
@@ -279,41 +171,47 @@ export default function MoneyScreen() {
       <SectionLabel>Recent confirmed</SectionLabel>
       <Surface>
         {(money?.confirmed ?? []).map((transaction) => (
-          <View key={transaction._id} style={styles.transaction}>
-            <View style={styles.transactionIcon}>
-              <Ionicons color={colors.primaryDark} name={(transaction.type ?? "expense") === "income" ? "arrow-down" : "receipt-outline"} size={20} />
-            </View>
-            <View style={styles.grow}>
-              <Text style={styles.transactionTitle}>{transaction.merchant || transaction.category}</Text>
-              <Text style={styles.meta}>{new Date(transaction.occurredAt).toLocaleDateString()} · {transaction.category} · {transaction.paymentMethod ?? "online"}</Text>
-              {transaction.note ? <Text style={styles.meta}>{transaction.note}</Text> : null}
-            </View>
-            <Text style={styles.transactionTitle}>{(transaction.type ?? "expense") === "income" ? "+" : "-"}{moneyText(transaction.amount)}</Text>
-            <Pressable accessibilityLabel={`Edit ${transaction.category} transaction`} accessibilityRole="button" onPress={() => editTransaction(transaction)} style={styles.iconButton}>
-              <Ionicons color={colors.primaryDark} name="create-outline" size={20} />
-            </Pressable>
-            <Pressable accessibilityLabel={`Delete ${transaction.category} transaction`} accessibilityRole="button" onPress={() => removeTransaction({ transactionId: transaction._id })} style={styles.iconButton}>
-              <Ionicons color={colors.coral} name="trash-outline" size={20} />
-            </Pressable>
-          </View>
+          <TransactionRow
+            key={transaction._id}
+            transaction={transaction}
+            onEdit={() => editTransaction(transaction)}
+            onRemove={() => removeTransaction({ transactionId: transaction._id })}
+          />
         ))}
         {money?.confirmed.length === 0 ? <Text style={styles.emptyText}>No confirmed transactions yet.</Text> : null}
       </Surface>
 
-      <SectionLabel>Category analytics</SectionLabel>
-      <Surface style={styles.analytics}>
-        {(money?.summary ?? []).map((item) => (
-          <View key={`${item.type}-${item.category}`} style={styles.barRow}>
-            <View style={styles.barLabel}>
-              <Text style={styles.transactionTitle}>{item.category}</Text>
-              <Text style={styles.meta}>{item.type} · {moneyText(item.amount)}</Text>
-            </View>
-            <View style={styles.barTrack}>
-              <View style={[styles.barFill, { width: `${Math.max(8, Math.round((item.amount / maxSummary) * 100))}%` as `${number}%`, backgroundColor: item.type === "income" ? colors.primary : colors.coral }]} />
-            </View>
+      <Surface>
+        <Pressable accessibilityRole="button" onPress={() => setDeeperOpen((open) => !open)} style={styles.deeperToggle}>
+          <Ionicons color={colors.primaryDark} name="analytics-outline" size={21} />
+          <View style={styles.grow}>
+            <Text style={styles.transactionTitle}>Summaries</Text>
+            <Text style={styles.meta}>Accounts and category totals</Text>
           </View>
-        ))}
-        {money?.summary.length === 0 ? <Text style={styles.emptyText}>Add confirmed transactions to build analytics.</Text> : null}
+          <Ionicons color={colors.muted} name={deeperOpen ? "chevron-up" : "chevron-down"} size={18} />
+        </Pressable>
+        {deeperOpen ? (
+          <View style={styles.deeper}>
+            {(money?.accounts ?? []).map((account) => (
+              <View key={account._id} style={styles.summaryRow}>
+                <Text style={styles.transactionTitle}>{account.name}</Text>
+                <Text style={styles.meta}>{moneyText(account.balance)}</Text>
+              </View>
+            ))}
+            {(money?.summary ?? []).map((item) => (
+              <View key={`${item.type}-${item.category}`} style={styles.barRow}>
+                <View style={styles.barLabel}>
+                  <Text style={styles.transactionTitle}>{item.category}</Text>
+                  <Text style={styles.meta}>{item.type} - {moneyText(item.amount)}</Text>
+                </View>
+                <View style={styles.barTrack}>
+                  <View style={[styles.barFill, { width: `${Math.max(8, Math.round((item.amount / maxSummary) * 100))}%` as `${number}%`, backgroundColor: item.type === "income" ? colors.primary : colors.coral }]} />
+                </View>
+              </View>
+            ))}
+            {money?.summary.length === 0 ? <Text style={styles.emptyText}>Confirmed transactions will build summaries.</Text> : null}
+          </View>
+        ) : null}
       </Surface>
 
       <Modal animationType="slide" transparent visible={editingTransaction !== null} onRequestClose={resetTransaction}>
@@ -326,7 +224,7 @@ export default function MoneyScreen() {
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={styles.modalContent} nestedScrollEnabled>
-              {transactionFields(true)}
+              {transactionFields()}
               <Pressable accessibilityRole="button" onPress={saveTransaction} style={styles.addButton}>
                 <Text style={styles.addButtonText}>Save changes</Text>
               </Pressable>
@@ -335,6 +233,56 @@ export default function MoneyScreen() {
         </View>
       </Modal>
     </Screen>
+  );
+}
+
+function TransactionRow({
+  onConfirm,
+  onEdit,
+  onIgnore,
+  onRemove,
+  pending = false,
+  transaction,
+}: {
+  onConfirm?: () => void;
+  onEdit: () => void;
+  onIgnore?: () => void;
+  onRemove: () => void;
+  pending?: boolean;
+  transaction: Doc<"transactions">;
+}) {
+  const type = transaction.type ?? "expense";
+  return (
+    <View style={[styles.transaction, pending && styles.pending]}>
+      <View style={styles.transactionIcon}>
+        <Ionicons color={pending ? colors.coral : colors.primaryDark} name={type === "income" ? "arrow-down" : "receipt-outline"} size={20} />
+      </View>
+      <View style={styles.grow}>
+        <Text style={styles.transactionTitle}>{transaction.merchant || transaction.category}</Text>
+        <Text style={styles.meta}>
+          {new Date(transaction.occurredAt).toLocaleDateString()} - {transaction.category} - {transaction.paymentMethod ?? "online"}
+        </Text>
+        {transaction.source ? <Text style={styles.meta}>{transaction.source}{transaction.resolution ? ` - ${transaction.resolution}` : ""}</Text> : null}
+        {transaction.note ? <Text style={styles.meta}>{transaction.note}</Text> : null}
+      </View>
+      <Text style={styles.transactionTitle}>{type === "income" ? "+" : "-"}{moneyText(transaction.amount)}</Text>
+      <Pressable accessibilityLabel={`Edit ${transaction.category} transaction`} accessibilityRole="button" onPress={onEdit} style={styles.iconButton}>
+        <Ionicons color={colors.primaryDark} name="create-outline" size={20} />
+      </Pressable>
+      {pending && onConfirm ? (
+        <Pressable accessibilityLabel={`Confirm ${transaction.category} transaction`} accessibilityRole="button" onPress={onConfirm} style={styles.confirm}>
+          <Ionicons color={colors.surface} name="checkmark" size={20} />
+        </Pressable>
+      ) : null}
+      {pending && onIgnore ? (
+        <Pressable accessibilityLabel={`Ignore ${transaction.category} transaction`} accessibilityRole="button" onPress={onIgnore} style={styles.iconButton}>
+          <Ionicons color={colors.coral} name="close" size={20} />
+        </Pressable>
+      ) : null}
+      <Pressable accessibilityLabel={`Delete ${transaction.category} transaction`} accessibilityRole="button" onPress={onRemove} style={styles.iconButton}>
+        <Ionicons color={colors.coral} name="trash-outline" size={20} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -348,41 +296,36 @@ function Chip({ label, onPress, selected }: { label: string; onPress: () => void
 
 const styles = StyleSheet.create({
   budget: { backgroundColor: colors.sageSurface, borderColor: colors.border, borderRadius: radii.card, borderWidth: 1, padding: spacing.lg },
+  budgetOver: { backgroundColor: colors.coralSurface, borderColor: colors.coral },
   budgetLabel: { color: colors.text, fontSize: 14 },
-  amountRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between", marginTop: spacing.md },
   amount: { color: colors.text, fontSize: 34, fontWeight: "700", marginTop: spacing.sm },
-  ofAmount: { color: colors.muted, fontSize: 14 },
+  overText: { color: colors.coral },
   track: { backgroundColor: colors.surface, borderRadius: radii.pill, height: 10, marginTop: spacing.lg, overflow: "hidden" },
   progress: { backgroundColor: colors.primary, height: "100%" },
+  progressOver: { backgroundColor: colors.coral },
   used: { color: colors.primaryDark, fontSize: 13, fontWeight: "600", marginTop: spacing.sm },
-  form: { gap: spacing.sm, padding: spacing.md },
-  transactionForm: { overflow: "visible", zIndex: 10 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },
+  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   chipTextSelected: { color: colors.surface },
-  categoryToggle: { alignItems: "center", flexDirection: "row", gap: spacing.sm, minHeight: 44 },
-  categoryToggleText: { color: colors.primaryDark, fontSize: 14, fontWeight: "700" },
-  inline: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   grow: { flex: 1 },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 14, minHeight: 44, paddingHorizontal: spacing.sm },
   addButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.control, justifyContent: "center", minHeight: 48 },
   addButtonText: { color: colors.surface, fontSize: 15, fontWeight: "700" },
   iconButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
-  accountRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 72, paddingHorizontal: spacing.md },
-  accountToggle: { alignItems: "center", flexDirection: "row", gap: spacing.sm, minHeight: 56, paddingHorizontal: spacing.md },
-  accountToggleText: { color: colors.primaryDark, fontSize: 14, fontWeight: "700" },
-  pending: { alignItems: "center", backgroundColor: colors.coralSurface, borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 72, paddingHorizontal: spacing.md },
+  pending: { backgroundColor: colors.coralSurface },
   transaction: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 72, paddingHorizontal: spacing.md },
   transactionIcon: { alignItems: "center", backgroundColor: colors.sageSurface, borderRadius: radii.pill, height: 40, justifyContent: "center", width: 40 },
   transactionTitle: { color: colors.text, fontSize: 14, fontWeight: "600" },
   meta: { color: colors.muted, fontSize: 12, marginTop: spacing.xs },
   confirm: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.pill, height: 44, justifyContent: "center", width: 44 },
   emptyText: { color: colors.muted, fontSize: 14, padding: spacing.md },
-  analytics: { gap: spacing.md, padding: spacing.md },
+  deeperToggle: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 72, padding: spacing.md },
+  deeper: { borderTopColor: colors.border, borderTopWidth: 1, gap: spacing.md, padding: spacing.md },
+  summaryRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   barRow: { gap: spacing.sm },
-  barLabel: { flexDirection: "row", justifyContent: "space-between", gap: spacing.sm },
+  barLabel: { flexDirection: "row", gap: spacing.sm, justifyContent: "space-between" },
   barTrack: { backgroundColor: colors.sageSurface, borderRadius: radii.pill, height: 10, overflow: "hidden" },
   barFill: { height: "100%" },
   modalBackdrop: { backgroundColor: "rgba(47,58,51,0.42)", flex: 1, justifyContent: "flex-end" },

@@ -6,6 +6,7 @@ import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View 
 
 import { api } from "../convex/_generated/api";
 import { Mascot, PrimaryButton } from "../src/components/ui";
+import { enqueueOffline } from "../src/offlineQueue";
 import { colors, radii, spacing } from "../src/theme";
 
 const descriptors = [
@@ -18,11 +19,39 @@ const descriptors = [
 
 export default function ReflectionScreen() {
   const addReflection = useMutation(api.core.addReflection);
+  const dismissReflection = useMutation(api.core.dismissReflection);
+  const snoozeReflection = useMutation(api.core.snoozeReflection);
   const [selected, setSelected] = useState<string[]>([]);
   const [note, setNote] = useState("");
+  const [syncMessage, setSyncMessage] = useState("");
 
   function toggle(label: string) {
     setSelected((items) => items.includes(label) ? items.filter((item) => item !== label) : [...items, label]);
+  }
+
+  async function finish() {
+    if (!selected.length && !note.trim()) await dismissReflection({});
+    else {
+      const payload = { note, tags: selected };
+      try {
+        await addReflection(payload);
+      } catch {
+        await enqueueOffline("addReflection", payload);
+        setSyncMessage("Saved offline. It will sync when the app reconnects.");
+        return;
+      }
+    }
+    router.back();
+  }
+
+  async function skip() {
+    await dismissReflection({});
+    router.back();
+  }
+
+  async function snooze() {
+    await snoozeReflection({});
+    router.back();
   }
 
   return (
@@ -33,7 +62,7 @@ export default function ReflectionScreen() {
         </Pressable>
         <Text style={styles.title}>What affected your day?</Text>
         <Text style={styles.subtitle}>Pick all that apply.</Text>
-        <View style={styles.mascot}><Mascot size={132} /></View>
+        <View style={styles.mascot}><Mascot size={132} variant="reflection" /></View>
 
         <View style={styles.options}>
           {descriptors.map(([label, icon, background]) => {
@@ -63,11 +92,12 @@ export default function ReflectionScreen() {
           style={styles.note}
           value={note}
         />
-        <PrimaryButton label="Done" onPress={async () => {
-          await addReflection({ note, tags: selected });
-          router.back();
-        }} />
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.skip}>
+        <PrimaryButton label="Done" onPress={finish} />
+        {syncMessage ? <Text style={styles.syncText}>{syncMessage}</Text> : null}
+        <Pressable accessibilityRole="button" onPress={snooze} style={styles.skip}>
+          <Text style={styles.skipText}>Snooze</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={skip} style={styles.skip}>
           <Text style={styles.skipText}>Skip for now</Text>
         </Pressable>
       </ScrollView>
@@ -89,4 +119,5 @@ const styles = StyleSheet.create({
   note: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.card, borderWidth: 1, color: colors.text, fontSize: 15, marginVertical: spacing.lg, minHeight: 88, padding: spacing.md, textAlignVertical: "top" },
   skip: { alignItems: "center", minHeight: 44, paddingTop: spacing.md },
   skipText: { color: colors.muted, fontSize: 14, fontWeight: "600" },
+  syncText: { color: colors.primaryDark, fontSize: 13, fontWeight: "600", marginTop: spacing.sm, textAlign: "center" },
 });
