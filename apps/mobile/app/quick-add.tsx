@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -114,7 +115,24 @@ export default function QuickAddModal() {
   const [task, setTask] = useState({ location: "", meetingLink: "", note: "", title: "" });
   const [value, setValue] = useState("");
   const [extracted, setExtracted] = useState<ExtractedAction[]>([]);
+  const [recognizing, setRecognizing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [voiceMessage, setVoiceMessage] = useState("");
+
+  useSpeechRecognitionEvent("start", () => {
+    setRecognizing(true);
+    setVoiceMessage("Listening...");
+  });
+  useSpeechRecognitionEvent("end", () => setRecognizing(false));
+  useSpeechRecognitionEvent("result", (event) => {
+    const transcript = event.results[0]?.transcript ?? "";
+    setValue(transcript);
+    setExtracted(parseCapture(transcript));
+  });
+  useSpeechRecognitionEvent("error", (event) => {
+    setRecognizing(false);
+    setVoiceMessage(event.message || "Voice capture is unavailable. Type the words instead.");
+  });
 
   useEffect(() => {
     void ensureMoneyDefaults({});
@@ -134,6 +152,24 @@ export default function QuickAddModal() {
       setSyncMessage("Saved offline. It will sync when the app reconnects.");
       return true;
     }
+  }
+
+  async function startVoiceCapture() {
+    const available = ExpoSpeechRecognitionModule.isRecognitionAvailable();
+    if (!available) {
+      setVoiceMessage("Voice capture is unavailable on this device. Type the words instead.");
+      return;
+    }
+    const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (!permission.granted) {
+      setVoiceMessage("Voice permission denied. Type the words instead.");
+      return;
+    }
+    ExpoSpeechRecognitionModule.start({
+      continuous: false,
+      interimResults: true,
+      lang: "en-US",
+    });
   }
 
   async function save() {
@@ -340,6 +376,13 @@ export default function QuickAddModal() {
               </View>
             ) : (
               <>
+                {selected === "Voice" ? (
+                  <Pressable accessibilityRole="button" onPress={recognizing ? () => ExpoSpeechRecognitionModule.stop() : startVoiceCapture} style={styles.voiceButton}>
+                    <Ionicons color={colors.surface} name={recognizing ? "stop" : "mic"} size={22} />
+                    <Text style={styles.voiceButtonText}>{recognizing ? "Stop listening" : "Start voice capture"}</Text>
+                  </Pressable>
+                ) : null}
+                {voiceMessage ? <Text style={styles.typeDetail}>{voiceMessage}</Text> : null}
                 <TextInput
                   accessibilityLabel={`${selected} details`}
                   autoFocus
@@ -432,6 +475,8 @@ const styles = StyleSheet.create({
   removePreview: { minHeight: 44, justifyContent: "center" },
   removePreviewText: { color: colors.coral, fontSize: 14, fontWeight: "700" },
   syncText: { color: colors.primaryDark, fontSize: 13, fontWeight: "600", textAlign: "center" },
+  voiceButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.control, flexDirection: "row", gap: spacing.sm, justifyContent: "center", minHeight: 48 },
+  voiceButtonText: { color: colors.surface, fontSize: 15, fontWeight: "700" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   inline: { flexDirection: "row", gap: spacing.sm },
   chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },
