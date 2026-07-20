@@ -6,6 +6,7 @@ import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View 
 
 import { api } from "../convex/_generated/api";
 import { Mascot, PrimaryButton } from "../src/components/ui";
+import { enqueueOffline } from "../src/offlineQueue";
 import { colors, radii, spacing } from "../src/theme";
 
 const descriptors = [
@@ -22,6 +23,7 @@ export default function ReflectionScreen() {
   const snoozeReflection = useMutation(api.core.snoozeReflection);
   const [selected, setSelected] = useState<string[]>([]);
   const [note, setNote] = useState("");
+  const [syncMessage, setSyncMessage] = useState("");
 
   function toggle(label: string) {
     setSelected((items) => items.includes(label) ? items.filter((item) => item !== label) : [...items, label]);
@@ -29,7 +31,16 @@ export default function ReflectionScreen() {
 
   async function finish() {
     if (!selected.length && !note.trim()) await dismissReflection({});
-    else await addReflection({ note, tags: selected });
+    else {
+      const payload = { note, tags: selected };
+      try {
+        await addReflection(payload);
+      } catch {
+        await enqueueOffline("addReflection", payload);
+        setSyncMessage("Saved offline. It will sync when the app reconnects.");
+        return;
+      }
+    }
     router.back();
   }
 
@@ -82,6 +93,7 @@ export default function ReflectionScreen() {
           value={note}
         />
         <PrimaryButton label="Done" onPress={finish} />
+        {syncMessage ? <Text style={styles.syncText}>{syncMessage}</Text> : null}
         <Pressable accessibilityRole="button" onPress={snooze} style={styles.skip}>
           <Text style={styles.skipText}>Snooze</Text>
         </Pressable>
@@ -107,4 +119,5 @@ const styles = StyleSheet.create({
   note: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.card, borderWidth: 1, color: colors.text, fontSize: 15, marginVertical: spacing.lg, minHeight: 88, padding: spacing.md, textAlignVertical: "top" },
   skip: { alignItems: "center", minHeight: 44, paddingTop: spacing.md },
   skipText: { color: colors.muted, fontSize: 14, fontWeight: "600" },
+  syncText: { color: colors.primaryDark, fontSize: 13, fontWeight: "600", marginTop: spacing.sm, textAlign: "center" },
 });
