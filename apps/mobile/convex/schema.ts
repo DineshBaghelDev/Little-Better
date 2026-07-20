@@ -38,10 +38,14 @@ export default defineSchema({
     accountId: v.optional(v.id("accounts")),
     amount: v.number(),
     category: v.string(),
+    detectionKey: v.optional(v.string()),
     merchant: v.optional(v.string()),
     note: v.optional(v.string()),
     occurredAt: v.number(),
     paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("online"))),
+    rawText: v.optional(v.string()),
+    resolution: v.optional(v.union(v.literal("failed"), v.literal("refunded"), v.literal("duplicate"))),
+    source: v.optional(v.union(v.literal("manual"), v.literal("text"), v.literal("notification"), v.literal("import"))),
     status: v.union(
       v.literal("pending"),
       v.literal("confirmed"),
@@ -50,7 +54,8 @@ export default defineSchema({
     type: v.optional(v.union(v.literal("expense"), v.literal("income"))),
   })
     .index("by_status", ["status"])
-    .index("by_status_and_occurredAt", ["status", "occurredAt"]),
+    .index("by_status_and_occurredAt", ["status", "occurredAt"])
+    .index("by_detectionKey", ["detectionKey"]),
   accounts: defineTable({
     archived: v.optional(v.boolean()),
     balance: v.number(),

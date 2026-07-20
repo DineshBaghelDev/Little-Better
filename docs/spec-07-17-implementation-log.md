@@ -23,3 +23,4 @@
 - Added Expo Notifications using SDK 57 docs, a persisted reminders toggle, local scheduling for upcoming tasks/focus/reflection/pending expense/weekly insight, and notification-response deep links via Expo Router.
 - Added structured text/voice capture previews for tasks with reminders, pending expenses, manual focus sessions, and bulk move-unfinished actions. Nothing from extracted text saves until Confirm all.
 - Changed manual Quick Add expenses to save confirmed immediately; extracted expenses remain pending previews.
+- Added payment-notification detection with duplicate keys, pending review for successful detections, ignored failed/refunded detections, guessed categories, and visible source/resolution text in Money.

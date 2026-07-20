@@ -262,6 +262,7 @@ function TransactionRow({
         <Text style={styles.meta}>
           {new Date(transaction.occurredAt).toLocaleDateString()} - {transaction.category} - {transaction.paymentMethod ?? "online"}
         </Text>
+        {transaction.source ? <Text style={styles.meta}>{transaction.source}{transaction.resolution ? ` - ${transaction.resolution}` : ""}</Text> : null}
         {transaction.note ? <Text style={styles.meta}>{transaction.note}</Text> : null}
       </View>
       <Text style={styles.transactionTitle}>{type === "income" ? "+" : "-"}{moneyText(transaction.amount)}</Text>
