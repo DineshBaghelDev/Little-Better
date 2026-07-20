@@ -12,6 +12,14 @@
     "typecheck": "npm --workspace apps/mobile run typecheck",
     "lint": "npm --workspace apps/mobile run lint"
   },
+  "dependencies": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
   "devDependencies": {
     "eslint": "^10.7.0",
     "prettier": "^3.9.5"
