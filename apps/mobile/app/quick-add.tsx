@@ -16,9 +16,78 @@ const types = [
   ["Task", "Action or to-do", "checkbox-outline", colors.lavenderSurface],
   ["Expense", "Spend or purchase", "cash-outline", colors.sageSurface],
   ["Focus", "Start or log focus", "timer-outline", colors.lavenderSurface],
-  ["Note", "Save as a task note", "document-text-outline", colors.mustardSurface],
-  ["Voice", "Type the captured words", "mic-outline", colors.coralSurface],
+  ["Note", "Extract structured actions", "document-text-outline", colors.mustardSurface],
+  ["Voice", "Confirm captured words", "mic-outline", colors.coralSurface],
 ] as const;
+
+type ExtractedAction =
+  | { amount: string; category: string; merchant: string; type: "expense"; warnings: string[] }
+  | { minutes: string; note: string; type: "focus"; warnings: string[] }
+  | { reminderLeadMinutes: string; scheduledAt: string; title: string; type: "task"; warnings: string[] }
+  | { exceptText: string; scheduledAt: string; type: "move"; warnings: string[] };
+
+function tomorrowDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return date;
+}
+
+function dateAt(value: Date, hour: number, minute = 0) {
+  const date = new Date(value);
+  date.setHours(hour, minute, 0, 0);
+  return date.getTime();
+}
+
+function parseHour(text: string) {
+  const match = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = Number(match[2] ?? 0);
+  const suffix = match[3]?.toLowerCase();
+  if (suffix === "pm" && hour < 12) hour += 12;
+  if (suffix === "am" && hour === 12) hour = 0;
+  return { hour: Math.max(0, Math.min(23, hour)), minute: Math.max(0, Math.min(59, minute)) };
+}
+
+function parseCapture(text: string): ExtractedAction[] {
+  const lower = text.toLowerCase();
+  const actions: ExtractedAction[] = [];
+  const amount = lower.match(/(?:spent|paid|rs|inr)\s*(?:rs|inr)?\s*(\d+)/i);
+  if (amount) {
+    const category = lower.match(/(?:on|for)\s+([a-z ]+?)(?:\.|,|$| and )/i)?.[1]?.trim() || "General";
+    actions.push({ amount: amount[1], category, merchant: "", type: "expense", warnings: category === "General" ? ["Category ambiguous"] : [] });
+  }
+
+  const studied = lower.match(/(?:studied|focused|worked on)\s+(.+?)\s+for\s+(\d+)\s*(minutes|minute|min|hours|hour)/i);
+  if (studied) {
+    const units = studied[3].startsWith("hour") ? 60 : 1;
+    actions.push({ minutes: String(Number(studied[2]) * units), note: studied[1], type: "focus", warnings: [] });
+  }
+
+  if (lower.includes("move unfinished tasks")) {
+    const exceptText = lower.match(/except\s+(.+?)(?:\.|$)/)?.[1]?.trim() || "";
+    actions.push({ exceptText, scheduledAt: String(dateAt(tomorrowDate(), 9)), type: "move", warnings: exceptText ? [] : ["Exception ambiguous"] });
+  }
+
+  if (lower.startsWith("add ") || lower.includes(" tomorrow ")) {
+    const title = text
+      .replace(/add\s+/i, "")
+      .replace(/tomorrow.*$/i, "")
+      .replace(/and remind.*$/i, "")
+      .trim();
+    const parsedTime = parseHour(lower.match(/at\s+([^,\.]+?)(?:\s+and|$)/)?.[1] ?? "");
+    const lead = lower.match(/remind me\s+(\d+)\s*(minutes|minute|min|hours|hour)/i);
+    if (title) actions.push({
+      reminderLeadMinutes: lead ? String(Number(lead[1]) * (lead[2].startsWith("hour") ? 60 : 1)) : "",
+      scheduledAt: String(dateAt(tomorrowDate(), parsedTime?.hour ?? 9, parsedTime?.minute ?? 0)),
+      title,
+      type: "task",
+      warnings: parsedTime ? [] : ["Time ambiguous"],
+    });
+  }
+
+  return actions.length ? actions : [{ reminderLeadMinutes: "", scheduledAt: "", title: text.trim(), type: "task", warnings: ["Could not infer date or type"] }];
+}
 
 export default function QuickAddModal() {
   const ensureMoneyDefaults = useMutation(api.core.ensureMoneyDefaults);
@@ -26,6 +95,7 @@ export default function QuickAddModal() {
   const addExpense = useMutation(api.core.addExpense);
   const removeCategory = useMutation(api.core.removeCategory);
   const addManualFocus = useMutation(api.core.addManualFocus);
+  const moveUnfinishedTasks = useMutation(api.core.moveUnfinishedTasks);
   const startFocus = useMutation(api.core.startFocus);
   const money = useQuery(api.core.money, {});
   const [selected, setSelected] = useState<string | null>(null);
@@ -42,6 +112,7 @@ export default function QuickAddModal() {
   const [focusDuration, setFocusDuration] = useState({ hours: "", minutes: "30" });
   const [task, setTask] = useState({ location: "", meetingLink: "", note: "", title: "" });
   const [value, setValue] = useState("");
+  const [extracted, setExtracted] = useState<ExtractedAction[]>([]);
 
   useEffect(() => {
     void ensureMoneyDefaults({});
@@ -73,6 +144,7 @@ export default function QuickAddModal() {
         note: expense.note,
         occurredAt: expenseDate(),
         paymentMethod: expense.paymentMethod,
+        status: "confirmed",
         type: expense.type,
       });
     } else if (selected === "Task") {
@@ -83,6 +155,42 @@ export default function QuickAddModal() {
         note: task.note,
         title: task.title,
       });
+    } else if (selected === "Note" || selected === "Voice") {
+      if (!extracted.length) return;
+      for (const action of extracted) {
+        if (action.type === "expense") {
+          const amount = Number(action.amount);
+          const accountId = expense.accountId ?? money?.accounts[0]?._id;
+          if (Number.isFinite(amount) && amount > 0 && accountId) await addExpense({
+            accountId,
+            amount,
+            category: action.category || "General",
+            merchant: action.merchant,
+            note: "",
+            paymentMethod: "online",
+            status: "pending",
+            type: "expense",
+          });
+        }
+        if (action.type === "focus") {
+          const minutes = Number(action.minutes);
+          if (Number.isFinite(minutes) && minutes > 0) await addManualFocus({ minutes });
+        }
+        if (action.type === "task" && action.title.trim()) {
+          const scheduledAt = Number(action.scheduledAt);
+          const reminderLeadMinutes = Number(action.reminderLeadMinutes);
+          await addTask({
+            note: "",
+            reminderLeadMinutes: Number.isFinite(reminderLeadMinutes) ? reminderLeadMinutes : undefined,
+            scheduledAt: Number.isFinite(scheduledAt) ? scheduledAt : undefined,
+            title: action.title,
+          });
+        }
+        if (action.type === "move") {
+          const scheduledAt = Number(action.scheduledAt);
+          if (Number.isFinite(scheduledAt)) await moveUnfinishedTasks({ exceptText: action.exceptText, scheduledAt });
+        }
+      }
     } else {
       if (!text) return;
       await addTask({ title: text });
@@ -215,17 +323,48 @@ export default function QuickAddModal() {
                 />
               </View>
             ) : (
-              <TextInput
-                accessibilityLabel={`${selected} details`}
-                autoFocus
-                onChangeText={setValue}
-                placeholder={`Describe your ${selected.toLowerCase()}`}
-                placeholderTextColor={colors.muted}
-                style={styles.input}
-                value={value}
-              />
+              <>
+                <TextInput
+                  accessibilityLabel={`${selected} details`}
+                  autoFocus
+                  multiline
+                  onChangeText={(text) => {
+                    setValue(text);
+                    setExtracted(parseCapture(text));
+                  }}
+                  placeholder={`Describe your ${selected.toLowerCase()}`}
+                  placeholderTextColor={colors.muted}
+                  style={[styles.input, styles.captureInput]}
+                  value={value}
+                />
+                {extracted.map((action, index) => (
+                  <Surface key={`${action.type}-${index}`} style={styles.preview}>
+                    <Text style={styles.typeTitle}>{action.type === "move" ? "Move unfinished tasks" : action.type}</Text>
+                    {action.warnings.map((warning) => <Text key={warning} style={styles.warning}>{warning}</Text>)}
+                    {action.type === "expense" ? (
+                      <>
+                        <TextInput accessibilityLabel="Extracted amount" keyboardType="decimal-pad" onChangeText={(amount) => setExtracted((items) => items.map((item, i) => i === index && item.type === "expense" ? { ...item, amount } : item))} placeholder="Amount" placeholderTextColor={colors.muted} style={styles.input} value={action.amount} />
+                        <TextInput accessibilityLabel="Extracted category" onChangeText={(category) => setExtracted((items) => items.map((item, i) => i === index && item.type === "expense" ? { ...item, category } : item))} placeholder="Category" placeholderTextColor={colors.muted} style={styles.input} value={action.category} />
+                        <Text style={styles.typeDetail}>Saves as pending preview.</Text>
+                      </>
+                    ) : action.type === "focus" ? (
+                      <TextInput accessibilityLabel="Extracted focus minutes" keyboardType="number-pad" onChangeText={(minutes) => setExtracted((items) => items.map((item, i) => i === index && item.type === "focus" ? { ...item, minutes } : item))} placeholder="Minutes" placeholderTextColor={colors.muted} style={styles.input} value={action.minutes} />
+                    ) : action.type === "move" ? (
+                      <TextInput accessibilityLabel="Except task text" onChangeText={(exceptText) => setExtracted((items) => items.map((item, i) => i === index && item.type === "move" ? { ...item, exceptText } : item))} placeholder="Except text" placeholderTextColor={colors.muted} style={styles.input} value={action.exceptText} />
+                    ) : (
+                      <>
+                        <TextInput accessibilityLabel="Extracted task title" onChangeText={(title) => setExtracted((items) => items.map((item, i) => i === index && item.type === "task" ? { ...item, title } : item))} placeholder="Task title" placeholderTextColor={colors.muted} style={styles.input} value={action.title} />
+                        <TextInput accessibilityLabel="Reminder lead minutes" keyboardType="number-pad" onChangeText={(reminderLeadMinutes) => setExtracted((items) => items.map((item, i) => i === index && item.type === "task" ? { ...item, reminderLeadMinutes } : item))} placeholder="Reminder minutes" placeholderTextColor={colors.muted} style={styles.input} value={action.reminderLeadMinutes} />
+                      </>
+                    )}
+                    <Pressable accessibilityRole="button" onPress={() => setExtracted((items) => items.filter((_, i) => i !== index))} style={styles.removePreview}>
+                      <Text style={styles.removePreviewText}>Discard row</Text>
+                    </Pressable>
+                  </Surface>
+                ))}
+              </>
             )}
-            <PrimaryButton label={selected === "Focus" || selected === "Expense" || selected === "Task" || value.trim() ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={save} />
+            <PrimaryButton label={selected === "Note" || selected === "Voice" ? "Confirm all" : selected === "Focus" || selected === "Expense" || selected === "Task" || value.trim() ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={save} />
             <Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={styles.changeType}>
               <Text style={styles.changeTypeText}>Choose another type</Text>
             </Pressable>
@@ -268,8 +407,13 @@ const styles = StyleSheet.create({
   confirmation: { gap: spacing.md },
   selectedLabel: { color: colors.primaryDark, fontSize: 14, fontWeight: "700" },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 16, minHeight: 52, paddingHorizontal: spacing.md },
+  captureInput: { minHeight: 88, paddingTop: spacing.md, textAlignVertical: "top" },
   changeType: { alignItems: "center", minHeight: 44, paddingTop: spacing.sm },
   changeTypeText: { color: colors.primaryDark, fontSize: 14, fontWeight: "600" },
+  preview: { gap: spacing.sm, padding: spacing.md },
+  warning: { color: colors.coral, fontSize: 12, fontWeight: "700" },
+  removePreview: { minHeight: 44, justifyContent: "center" },
+  removePreviewText: { color: colors.coral, fontSize: 14, fontWeight: "700" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   inline: { flexDirection: "row", gap: spacing.sm },
   chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },

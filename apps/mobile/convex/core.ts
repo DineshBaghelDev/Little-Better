@@ -29,6 +29,7 @@ const task = v.object({
   location: v.optional(v.string()),
   meetingLink: v.optional(v.string()),
   note: v.optional(v.string()),
+  reminderLeadMinutes: v.optional(v.number()),
   scheduledAt: v.optional(v.number()),
   status: v.union(v.literal("planned"), v.literal("done")),
   title: v.string(),
@@ -688,6 +689,7 @@ export const addTask = mutation({
     location: v.optional(v.string()),
     meetingLink: v.optional(v.string()),
     note: v.optional(v.string()),
+    reminderLeadMinutes: v.optional(v.number()),
     scheduledAt: v.optional(v.number()),
     title: v.string(),
   },
@@ -698,6 +700,10 @@ export const addTask = mutation({
       location: args.location?.trim() || undefined,
       meetingLink: args.meetingLink?.trim() || undefined,
       note: args.note?.trim() || undefined,
+      reminderLeadMinutes:
+        args.reminderLeadMinutes === undefined
+          ? undefined
+          : Math.max(0, Math.min(1440, Math.round(args.reminderLeadMinutes))),
       scheduledAt: args.scheduledAt,
       title,
       status: "planned",
@@ -737,6 +743,25 @@ export const addReflection = mutation({
       tags: args.tags,
     });
     return null;
+  },
+});
+
+export const moveUnfinishedTasks = mutation({
+  args: { exceptText: v.optional(v.string()), scheduledAt: v.number() },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const except = args.exceptText?.trim().toLowerCase();
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_status", (q) => q.eq("status", "planned"))
+      .take(100);
+    let moved = 0;
+    for (const item of tasks) {
+      if (except && item.title.toLowerCase().includes(except)) continue;
+      await ctx.db.patch(item._id, { scheduledAt: args.scheduledAt });
+      moved += 1;
+    }
+    return moved;
   },
 });
 

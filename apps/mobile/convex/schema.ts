@@ -7,6 +7,7 @@ export default defineSchema({
     location: v.optional(v.string()),
     meetingLink: v.optional(v.string()),
     note: v.optional(v.string()),
+    reminderLeadMinutes: v.optional(v.number()),
     title: v.string(),
     status: v.union(v.literal("planned"), v.literal("done")),
     scheduledAt: v.optional(v.number()),
