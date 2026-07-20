@@ -27,3 +27,5 @@
 - Added payment-notification detection with duplicate keys, pending review for successful detections, ignored failed/refunded detections, guessed categories, and visible source/resolution text in Money.
 - Added AsyncStorage-backed offline queue for task, manual expense, manual focus, and reflection capture; queued writes replay on app mount and every 15 seconds.
 - Added local focus timer persistence so an offline timer survives navigation/restart and appears as Today rank 1 until ended and replayed as a focus session.
+- Added skippable onboarding reminder choice and stored it in bootstrap.
+- Added a reachable Payment alert capture path that feeds raw notification text through the payment detector.

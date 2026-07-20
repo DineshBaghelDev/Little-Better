@@ -30,6 +30,7 @@ export default function OnboardingScreen() {
   const [values, setValues] = useState({
     focusName: "Study",
     monthlyBudget: "25000",
+    notificationsEnabled: false,
     preferredHour: "9",
     reflectionHour: "20",
     targetType: "sessions_per_week" as TargetType,
@@ -41,12 +42,14 @@ export default function OnboardingScreen() {
     { icon: "alarm-outline", label: "Preferred focus time", value: `${values.preferredHour || "9"}:00` },
     { icon: "moon-outline", label: "Reflection time", value: `${values.reflectionHour || "20"}:00` },
     { icon: "wallet-outline", label: "Monthly budget", value: values.monthlyBudget || "0" },
+    { icon: "notifications-outline", label: "Reminders", value: values.notificationsEnabled ? "On" : "Skipped" },
   ] as const;
 
   async function startPlan() {
     await bootstrap({
       focusName: values.focusName,
       monthlyBudget: Number(values.monthlyBudget) || 0,
+      notificationsEnabled: values.notificationsEnabled,
       preferredHour: Number(values.preferredHour) || 9,
       reflectionHour: Number(values.reflectionHour) || 20,
       targetType: values.targetType,
@@ -143,6 +146,18 @@ export default function OnboardingScreen() {
             style={styles.input}
             value={values.monthlyBudget}
           />
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: values.notificationsEnabled }}
+            onPress={() => setValues((current) => ({ ...current, notificationsEnabled: !current.notificationsEnabled }))}
+            style={styles.toggleRow}
+          >
+            <View style={styles.toggleCopy}>
+              <Text style={styles.setupLabel}>Reminders</Text>
+              <Text style={styles.helperText}>Optional. You can skip and still use the app.</Text>
+            </View>
+            <Ionicons color={values.notificationsEnabled ? colors.primaryDark : colors.muted} name={values.notificationsEnabled ? "toggle" : "toggle-outline"} size={32} />
+          </Pressable>
         </Surface>
 
         <PrimaryButton label="Start my plan" onPress={startPlan} />
@@ -196,5 +211,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: spacing.md,
   },
+  toggleRow: { alignItems: "center", borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", minHeight: 56, paddingHorizontal: spacing.md },
+  toggleCopy: { flex: 1 },
+  helperText: { color: colors.muted, fontSize: 12, marginTop: 2 },
   footnote: { color: colors.muted, fontSize: 12, marginTop: spacing.sm, textAlign: "center" },
 });
