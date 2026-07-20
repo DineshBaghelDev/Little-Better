@@ -41,10 +41,14 @@ const transaction = v.object({
   accountId: v.optional(v.id("accounts")),
   amount: v.number(),
   category: v.string(),
+  detectionKey: v.optional(v.string()),
   merchant: v.optional(v.string()),
   note: v.optional(v.string()),
   occurredAt: v.number(),
   paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("online"))),
+  rawText: v.optional(v.string()),
+  resolution: v.optional(v.union(v.literal("failed"), v.literal("refunded"), v.literal("duplicate"))),
+  source: v.optional(v.union(v.literal("manual"), v.literal("text"), v.literal("notification"), v.literal("import"))),
   status: v.union(v.literal("pending"), v.literal("confirmed"), v.literal("ignored")),
   type: v.optional(v.union(v.literal("expense"), v.literal("income"))),
 });
@@ -222,6 +226,19 @@ function computedFocusTimeInsight(focus: Doc<"focusCategories"> | null, sessions
     },
     requirement: null,
   };
+}
+
+function categoryFromText(text: string) {
+  const lower = text.toLowerCase();
+  if (/(food|cafe|restaurant|grocery|groceries|swiggy|zomato)/.test(lower)) return "Food";
+  if (/(uber|ola|metro|fuel|petrol|travel)/.test(lower)) return "Travel";
+  if (/(electric|water|bill|recharge|internet)/.test(lower)) return "Bills";
+  return "General";
+}
+
+function detectionKey(amount: number, merchant: string, occurredAt: number) {
+  const bucket = Math.floor(occurredAt / (10 * 60 * 1000));
+  return `${Math.round(amount)}:${merchant.trim().toLowerCase() || "unknown"}:${bucket}`;
 }
 
 async function firstActiveTimer(ctx: QueryCtx | MutationCtx) {
@@ -923,6 +940,7 @@ export const addExpense = mutation({
     note: v.optional(v.string()),
     occurredAt: v.optional(v.number()),
     paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("online"))),
+    source: v.optional(v.union(v.literal("manual"), v.literal("text"), v.literal("notification"), v.literal("import"))),
     status: v.optional(v.union(v.literal("pending"), v.literal("confirmed"))),
     type: v.optional(v.union(v.literal("expense"), v.literal("income"))),
   },
@@ -938,10 +956,53 @@ export const addExpense = mutation({
       note: args.note?.trim() || undefined,
       occurredAt: args.occurredAt ?? Date.now(),
       paymentMethod: args.paymentMethod ?? "online",
+      source: args.source ?? "manual",
       status: args.status ?? "pending",
       type: args.type ?? "expense",
     });
     return null;
+  },
+});
+
+export const detectPaymentNotification = mutation({
+  args: { occurredAt: v.optional(v.number()), text: v.string() },
+  returns: v.union(v.id("transactions"), v.null()),
+  handler: async (ctx, args) => {
+    const rawText = args.text.trim();
+    if (!rawText) return null;
+    const lower = rawText.toLowerCase();
+    const amountMatch = lower.match(/(?:rs|inr|₹)\s*([\d,]+)|([\d,]+)\s*(?:rs|inr)/i);
+    const amount = Number((amountMatch?.[1] ?? amountMatch?.[2] ?? "").replace(/,/g, ""));
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    const occurredAt = args.occurredAt ?? Date.now();
+    const merchant =
+      rawText.match(/(?:to|at|paid to|sent to)\s+([a-z0-9 &.'-]+?)(?:\.|,| on | using | via |$)/i)?.[1]?.trim() ??
+      "Unknown merchant";
+    const key = detectionKey(amount, merchant, occurredAt);
+    const existing = await ctx.db
+      .query("transactions")
+      .withIndex("by_detectionKey", (q) => q.eq("detectionKey", key))
+      .first();
+    if (existing) return existing._id;
+
+    const failed = /(failed|declined|unsuccessful|reversed|refund|refunded)/.test(lower);
+    const fallbackAccount = await firstAccount(ctx);
+    const transactionId = await ctx.db.insert("transactions", {
+      accountId: fallbackAccount?._id,
+      amount: Math.round(amount),
+      category: categoryFromText(rawText),
+      detectionKey: key,
+      merchant,
+      note: failed ? "Detected payment did not count toward spending." : undefined,
+      occurredAt,
+      paymentMethod: "online",
+      rawText,
+      resolution: failed ? (/(refund|refunded|reversed)/.test(lower) ? "refunded" : "failed") : undefined,
+      source: "notification",
+      status: failed ? "ignored" : "pending",
+      type: "expense",
+    });
+    return failed ? null : transactionId;
   },
 });
 
@@ -1063,6 +1124,8 @@ export const updateTransaction = mutation({
     note: v.optional(v.string()),
     occurredAt: v.optional(v.number()),
     paymentMethod: v.optional(v.union(v.literal("cash"), v.literal("online"))),
+    resolution: v.optional(v.union(v.literal("failed"), v.literal("refunded"), v.literal("duplicate"))),
+    source: v.optional(v.union(v.literal("manual"), v.literal("text"), v.literal("notification"), v.literal("import"))),
     status: v.optional(v.union(v.literal("pending"), v.literal("confirmed"), v.literal("ignored"))),
     transactionId: v.id("transactions"),
     type: v.optional(v.union(v.literal("expense"), v.literal("income"))),
@@ -1077,6 +1140,8 @@ export const updateTransaction = mutation({
       note: string;
       occurredAt: number;
       paymentMethod: "cash" | "online";
+      resolution: "failed" | "refunded" | "duplicate";
+      source: "manual" | "text" | "notification" | "import";
       status: "pending" | "confirmed" | "ignored";
       type: "expense" | "income";
     }> = {};
@@ -1087,6 +1152,8 @@ export const updateTransaction = mutation({
     if (args.note !== undefined) patch.note = args.note.trim();
     if (args.occurredAt !== undefined && Number.isFinite(args.occurredAt)) patch.occurredAt = args.occurredAt;
     if (args.paymentMethod !== undefined) patch.paymentMethod = args.paymentMethod;
+    if (args.resolution !== undefined) patch.resolution = args.resolution;
+    if (args.source !== undefined) patch.source = args.source;
     if (args.status !== undefined) patch.status = args.status;
     if (args.type !== undefined) patch.type = args.type;
     if (Object.keys(patch).length) await ctx.db.patch(args.transactionId, patch);

@@ -144,6 +144,7 @@ export default function QuickAddModal() {
         note: expense.note,
         occurredAt: expenseDate(),
         paymentMethod: expense.paymentMethod,
+        source: "manual",
         status: "confirmed",
         type: expense.type,
       });
@@ -168,6 +169,7 @@ export default function QuickAddModal() {
             merchant: action.merchant,
             note: "",
             paymentMethod: "online",
+            source: "text",
             status: "pending",
             type: "expense",
           });
