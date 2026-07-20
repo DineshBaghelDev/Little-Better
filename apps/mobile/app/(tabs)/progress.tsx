@@ -108,8 +108,8 @@ export default function ProgressScreen() {
 
       <View style={styles.stats}>
         <Stat color={colors.sageSurface} label={insights?.focusCategoryName ?? "Focus"} value={`${insights?.focusSessions ?? 0}`} detail={`${insights?.focusMinutes ?? 0} minutes`} />
-        <Stat color={colors.lavenderSurface} label="Tasks" value={`${insights?.completedTasks ?? 0}`} detail="completed" />
-        <Stat color={colors.mustardSurface} label="Spent" value={moneyText(insights?.spent ?? 0)} detail="confirmed" />
+        <Stat color={colors.lavenderSurface} label="Task" value={`${insights?.completedTasks ?? 0}`} detail="completed" />
+        <Stat color={colors.mustardSurface} label="Spent" value={moneyText(insights?.spent ?? 0)} detail="confirmed" wide />
       </View>
 
       {currentInsight && currentInsightStatus === "new" ? (
@@ -209,9 +209,9 @@ function Chip({ label, onPress, selected }: { label: string; onPress: () => void
   );
 }
 
-function Stat({ color, detail, label, value }: { color: string; detail: string; label: string; value: string }) {
+function Stat({ color, detail, label, value, wide = false }: { color: string; detail: string; label: string; value: string; wide?: boolean }) {
   return (
-    <View style={[styles.stat, { backgroundColor: color }]}>
+    <View style={[styles.stat, wide && styles.statWide, { backgroundColor: color }]}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text adjustsFontSizeToFit numberOfLines={1} style={styles.statValue}>{value}</Text>
       <Text style={styles.meta}>{detail}</Text>
@@ -226,8 +226,9 @@ const styles = StyleSheet.create({
   chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
   chipTextSelected: { color: colors.surface },
   dateRow: { flexDirection: "row", gap: spacing.sm, position: "relative", zIndex: 20 },
-  stats: { flexDirection: "row", gap: spacing.sm },
-  stat: { borderRadius: radii.card, flex: 1, minHeight: 112, padding: spacing.md },
+  stats: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  stat: { borderRadius: radii.card, flexGrow: 1, minHeight: 112, padding: spacing.md, width: "47%" },
+  statWide: { width: "100%" },
   statLabel: { color: colors.text, fontSize: 12 },
   statValue: { color: colors.text, fontSize: 24, fontWeight: "700", marginTop: spacing.sm },
   meta: { color: colors.muted, fontSize: 12, marginTop: spacing.xs },
