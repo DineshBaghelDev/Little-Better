@@ -3,14 +3,18 @@ import { router } from "expo-router";
 import { useEffect } from "react";
 import { Platform } from "react-native";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+const supportsNativeNotifications = Platform.OS !== "web";
+
+if (supportsNativeNotifications) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 type ScheduledItem = {
   body: string;
@@ -34,6 +38,8 @@ async function ensurePermission() {
 
 export function useNotificationObserver() {
   useEffect(() => {
+    if (!supportsNativeNotifications) return;
+
     function redirect(notification: Notifications.Notification) {
       const url = notification.request.content.data?.url;
       if (typeof url === "string") router.push(url);
@@ -51,6 +57,8 @@ export function useNotificationObserver() {
 }
 
 export async function scheduleLocalNotifications(items: ScheduledItem[]) {
+  if (!supportsNativeNotifications) return false;
+
   if (!(await ensurePermission())) return false;
   await Notifications.cancelAllScheduledNotificationsAsync();
   const now = Date.now();

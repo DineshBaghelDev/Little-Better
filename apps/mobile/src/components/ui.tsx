@@ -98,7 +98,6 @@ export function Mascot({
     <View
       accessibilityElementsHidden
       importantForAccessibility="no"
-      pointerEvents="none"
       style={[styles.mascot, { height: size, width: size }]}
     >
       <View style={[styles.leaf, styles.leafLeft, { height: size * 0.2, width: size * 0.13 }]} />

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { colors, radii, spacing } from "../theme";
 
@@ -79,12 +79,16 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     position: "absolute",
     right: 0,
-    shadowColor: colors.text,
-    shadowOffset: { height: 6, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
     top: 60,
     zIndex: 30,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 6px 12px rgba(47, 58, 51, 0.12)" }
+      : {
+          shadowColor: colors.text,
+          shadowOffset: { height: 6, width: 0 },
+          shadowOpacity: 0.12,
+          shadowRadius: 12,
+        }),
   },
   menuScroll: { maxHeight: 420 },
   option: {
