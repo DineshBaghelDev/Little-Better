@@ -6,7 +6,7 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { api } from "../../convex/_generated/api";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
-import { PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
+import { Mascot, PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
 import { colors, spacing } from "../../src/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -153,6 +153,7 @@ export default function CalendarScreen() {
         ))}
         {!scheduled.length && !sessions.length ? (
           <Surface style={styles.empty}>
+            <Mascot size={88} variant="relaxed" />
             <Text style={styles.eventTitle}>Nothing planned yet</Text>
             <Text style={styles.eventTime}>Add one task or schedule an unscheduled item.</Text>
           </Surface>
@@ -328,7 +329,7 @@ const styles = StyleSheet.create({
   eventCopy: { flex: 1, padding: spacing.md },
   eventTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
   eventTime: { color: colors.muted, fontSize: 12, marginTop: spacing.xs },
-  empty: { padding: spacing.md },
+  empty: { alignItems: "center", padding: spacing.md },
   taskActions: { gap: spacing.sm, padding: spacing.md },
   actionRow: { flexDirection: "row", gap: spacing.sm },
   grow: { flex: 1 },

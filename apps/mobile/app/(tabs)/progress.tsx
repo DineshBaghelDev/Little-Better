@@ -7,7 +7,7 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
-import { PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
+import { Mascot, PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
 import { colors, radii, spacing } from "../../src/theme";
 
 type RangePreset = "day" | "week" | "month" | "year" | "custom";
@@ -114,7 +114,7 @@ export default function ProgressScreen() {
 
       {currentInsight && currentInsightStatus === "new" ? (
         <View style={styles.insight}>
-          <Ionicons color={colors.primaryDark} name="trending-up" size={40} />
+          <Mascot size={92} variant="proud" />
           <Text style={styles.insightTitle}>{currentInsight.observation}</Text>
           <Text style={styles.insightBody}>{currentInsight.evidence}</Text>
           <Surface style={styles.suggestion}>
@@ -143,6 +143,7 @@ export default function ProgressScreen() {
         </View>
       ) : currentInsight && currentInsightStatus === "dismissed" ? (
         <Surface style={styles.emptyInsight}>
+          <Mascot size={72} variant="relaxed" />
           <Text style={styles.suggestionTitle}>Insight dismissed</Text>
           <Pressable accessibilityRole="button" onPress={() => restoreDismissed(currentInsight._id)}>
             <Text style={styles.undo}>Undo</Text>
@@ -150,6 +151,7 @@ export default function ProgressScreen() {
         </Surface>
       ) : !currentInsight ? (
         <Surface style={styles.emptyInsight}>
+          <Mascot size={72} variant="working" />
           <Text style={styles.suggestionTitle}>Not enough data yet</Text>
           <Text style={styles.meta}>{insights?.insightRequirement ?? "Record 5 focus sessions for a weekly insight."}</Text>
         </Surface>

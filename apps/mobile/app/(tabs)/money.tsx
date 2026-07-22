@@ -8,7 +8,7 @@ import { Doc, Id } from "../../convex/_generated/dataModel";
 import { CategoryDropdown } from "../../src/components/CategoryDropdown";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
-import { SectionLabel, Surface } from "../../src/components/ui";
+import { Mascot, SectionLabel, Surface } from "../../src/components/ui";
 import { colors, radii, spacing } from "../../src/theme";
 
 type TransactionType = "expense" | "income";
@@ -132,7 +132,7 @@ export default function MoneyScreen() {
 
   return (
     <Screen
-      headerAction={<Ionicons color={colors.text} name="wallet-outline" size={24} />}
+      headerAction={<Mascot size={52} variant="working" />}
       subtitle="Budget, pending confirmations, and recent spend"
       title="Money"
     >
@@ -178,7 +178,12 @@ export default function MoneyScreen() {
             onRemove={() => removeTransaction({ transactionId: transaction._id })}
           />
         ))}
-        {money?.confirmed.length === 0 ? <Text style={styles.emptyText}>No confirmed transactions yet.</Text> : null}
+        {money?.confirmed.length === 0 ? (
+          <View style={styles.emptyMascot}>
+            <Mascot size={72} variant="watering" />
+            <Text style={styles.emptyText}>No confirmed transactions yet.</Text>
+          </View>
+        ) : null}
       </Surface>
 
       <Surface>
@@ -321,6 +326,7 @@ const styles = StyleSheet.create({
   meta: { color: colors.muted, fontSize: 12, marginTop: spacing.xs },
   confirm: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.pill, height: 44, justifyContent: "center", width: 44 },
   emptyText: { color: colors.muted, fontSize: 14, padding: spacing.md },
+  emptyMascot: { alignItems: "center", paddingTop: spacing.md },
   deeperToggle: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 72, padding: spacing.md },
   deeper: { borderTopColor: colors.border, borderTopWidth: 1, gap: spacing.md, padding: spacing.md },
   summaryRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
