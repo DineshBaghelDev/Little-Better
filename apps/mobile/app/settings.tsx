@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { api } from "../convex/_generated/api";
 import { Screen } from "../src/components/Screen";
 import { PrimaryButton, SectionLabel, Surface } from "../src/components/ui";
-import { colors, radii, spacing } from "../src/theme";
+import { backgroundPatterns, colorSchemes, colors, navStyles, radii, spacing } from "../src/theme";
 
 type TargetType = "sessions_per_week" | "minutes_per_day" | "minutes_per_week" | "binary_days";
 
@@ -38,8 +38,11 @@ export default function SettingsScreen() {
   const settings = useQuery(api.core.settingsView);
   const updateSettings = useMutation(api.core.updateSettings);
   const [form, setForm] = useState({
+    backgroundPattern: "sprouts",
+    colorScheme: "sage",
     focusName: "",
     monthlyBudget: "",
+    navStyle: "floating",
     notificationsEnabled: false,
     preferredHour: "",
     reflectionHour: "",
@@ -50,8 +53,11 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (!settings?.settings || !settings.focusCategory) return;
     setForm({
+      backgroundPattern: settings.settings.backgroundPattern ?? "sprouts",
+      colorScheme: settings.settings.colorScheme ?? "sage",
       focusName: settings.focusCategory.name,
       monthlyBudget: String(settings.settings.monthlyBudget),
+      navStyle: settings.settings.navStyle ?? "floating",
       notificationsEnabled: settings.settings.notificationsEnabled ?? false,
       preferredHour: String(settings.focusCategory.preferredHour ?? 9),
       reflectionHour: String(settings.settings.reflectionHour),
@@ -62,8 +68,11 @@ export default function SettingsScreen() {
 
   async function save() {
     await updateSettings({
+      backgroundPattern: form.backgroundPattern as "none" | "sprouts" | "dots" | "stars",
+      colorScheme: form.colorScheme as "sage" | "teal" | "lavender" | "coral" | "mustard",
       focusName: form.focusName,
       monthlyBudget: Number(form.monthlyBudget) || 0,
+      navStyle: form.navStyle as "floating" | "classic" | "compact",
       notificationsEnabled: form.notificationsEnabled,
       preferredHour: Number(form.preferredHour) || 9,
       reflectionHour: Number(form.reflectionHour) || 20,
@@ -123,6 +132,28 @@ export default function SettingsScreen() {
         <PrimaryButton label="Save settings" onPress={save} />
       </Surface>
 
+      <SectionLabel>Appearance</SectionLabel>
+      <Surface style={styles.form}>
+        <ChoiceGroup
+          label="Color scheme"
+          options={Object.entries(colorSchemes).map(([value, item]) => ({ color: item.primary, label: item.label, value }))}
+          selected={form.colorScheme}
+          onSelect={(colorScheme) => setForm((current) => ({ ...current, colorScheme }))}
+        />
+        <ChoiceGroup
+          label="Background pattern"
+          options={Object.entries(backgroundPatterns).map(([value, label]) => ({ label, value }))}
+          selected={form.backgroundPattern}
+          onSelect={(backgroundPattern) => setForm((current) => ({ ...current, backgroundPattern }))}
+        />
+        <ChoiceGroup
+          label="Navigation"
+          options={Object.entries(navStyles).map(([value, label]) => ({ label, value }))}
+          selected={form.navStyle}
+          onSelect={(navStyle) => setForm((current) => ({ ...current, navStyle }))}
+        />
+      </Surface>
+
       <SectionLabel>Notification controls</SectionLabel>
       <Surface>
         <Pressable
@@ -160,6 +191,38 @@ export default function SettingsScreen() {
   );
 }
 
+function ChoiceGroup({
+  label,
+  onSelect,
+  options,
+  selected,
+}: {
+  label: string;
+  onSelect: (value: string) => void;
+  options: { color?: string; label: string; value: string }[];
+  selected: string;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.choiceRow}>
+        {options.map((option) => (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: selected === option.value }}
+            key={option.value}
+            onPress={() => onSelect(option.value)}
+            style={[styles.choice, selected === option.value && styles.choiceSelected]}
+          >
+            {option.color ? <View style={[styles.swatch, { backgroundColor: option.color }]} /> : null}
+            <Text style={styles.choiceText}>{option.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function Field({ children, help, label }: PropsWithChildren<{ help: string; label: string }>) {
   return (
     <View style={styles.field}>
@@ -181,6 +244,11 @@ const styles = StyleSheet.create({
   option: { alignItems: "center", borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 64, padding: spacing.md },
   optionSelected: { backgroundColor: colors.sageSurface, borderColor: colors.primary },
   optionTitle: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  choice: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, flexDirection: "row", gap: spacing.xs, minHeight: 42, paddingHorizontal: spacing.md },
+  choiceSelected: { backgroundColor: colors.sageSurface, borderColor: colors.primary },
+  choiceText: { color: colors.text, fontSize: 13, fontWeight: "700" },
+  swatch: { borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, height: 18, width: 18 },
   notice: { gap: spacing.xs, padding: spacing.md },
   toggleRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 72, padding: spacing.md },
   row: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 64, paddingHorizontal: spacing.md },

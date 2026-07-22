@@ -83,8 +83,11 @@ export default defineSchema({
     status: v.union(v.literal("running"), v.literal("paused")),
   }).index("by_status", ["status"]),
   appSettings: defineTable({
+    backgroundPattern: v.optional(v.union(v.literal("none"), v.literal("sprouts"), v.literal("dots"), v.literal("stars"))),
+    colorScheme: v.optional(v.union(v.literal("sage"), v.literal("teal"), v.literal("lavender"), v.literal("coral"), v.literal("mustard"))),
     focusCategoryId: v.id("focusCategories"),
     monthlyBudget: v.number(),
+    navStyle: v.optional(v.union(v.literal("floating"), v.literal("classic"), v.literal("compact"))),
     notificationsEnabled: v.optional(v.boolean()),
     onboardedAt: v.number(),
     reflectionHour: v.number(),
