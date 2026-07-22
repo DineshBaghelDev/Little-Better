@@ -25,6 +25,7 @@ const spritePositions = {
   working: [2, 1],
 } as const;
 const spriteFrameSize = 512;
+type MascotVariant = keyof typeof spritePositions;
 
 export function Surface({
   children,
@@ -105,9 +106,9 @@ export function Mascot({
   variant = "calm",
 }: {
   size?: number;
-  variant?: keyof typeof spritePositions;
+  variant?: MascotVariant | string;
 }) {
-  const [column, row] = spritePositions[variant];
+  const [column, row] = spritePositions[variant as MascotVariant] ?? spritePositions.calm;
   const scale = size / spriteFrameSize;
   return (
     <View
