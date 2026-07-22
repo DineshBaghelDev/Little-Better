@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "convex/react";
 import { PropsWithChildren, ReactNode } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
@@ -34,24 +35,36 @@ export function Screen({ children, headerAction, subtitle, title }: ScreenProps)
 
 function Pattern({ color, kind }: { color: string; kind: "none" | "sprouts" | "dots" | "stars" }) {
   if (kind === "none") return null;
+  const count = kind === "dots" ? 22 : 15;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {Array.from({ length: kind === "sprouts" ? 14 : 18 }, (_, index) => (
-        <Text
-          key={index}
-          style={[
-            styles.patternMark,
-            {
-              color,
-              left: `${(index * 29) % 92}%` as `${number}%`,
-              opacity: kind === "stars" ? 0.18 : 0.12,
-              top: `${8 + ((index * 17) % 82)}%` as `${number}%`,
-            },
-          ]}
-        >
-          {kind === "sprouts" ? "~" : kind === "stars" ? "*" : "."}
-        </Text>
-      ))}
+      {Array.from({ length: count }, (_, index) => {
+        // Deterministic scatter with gentle size variation for a hand-placed feel.
+        const left = `${(index * 37 + (index % 3) * 7) % 93}%` as `${number}%`;
+        const top = `${6 + ((index * 23) % 86)}%` as `${number}%`;
+        const size = kind === "dots" ? 5 + (index % 3) * 2 : 14 + (index % 3) * 5;
+        const rotate = `${((index * 41) % 60) - 30}deg`;
+        if (kind === "dots") {
+          return (
+            <View
+              key={index}
+              style={[
+                styles.patternDot,
+                { backgroundColor: color, borderRadius: size, height: size, left, opacity: 0.1, top, width: size },
+              ]}
+            />
+          );
+        }
+        return (
+          <Ionicons
+            color={color}
+            key={index}
+            name={kind === "stars" ? "sparkles" : "leaf"}
+            size={size}
+            style={[styles.patternIcon, { left, opacity: kind === "stars" ? 0.14 : 0.1, top, transform: [{ rotate }] }]}
+          />
+        );
+      })}
     </View>
   );
 }
@@ -81,5 +94,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: spacing.xs,
   },
-  patternMark: { fontSize: 18, position: "absolute" },
+  patternDot: { position: "absolute" },
+  patternIcon: { position: "absolute" },
 });
