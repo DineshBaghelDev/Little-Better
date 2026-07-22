@@ -53,6 +53,7 @@ export default function CalendarScreen() {
   const addTask = useMutation(api.core.addTask);
   const completeTask = useMutation(api.core.completeTask);
   const scheduleTask = useMutation(api.core.scheduleTask);
+  const removeTask = useMutation(api.core.removeTask);
   const [taskForm, setTaskForm] = useState({
     location: "",
     meetingLink: "",
@@ -152,6 +153,10 @@ export default function CalendarScreen() {
                 <View style={styles.grow}><PrimaryButton label="Complete" onPress={() => completeTask({ taskId: task._id })} /></View>
                 <View style={styles.grow}><PrimaryButton label="Move" onPress={() => scheduleTask({ scheduledAt: timeOnDay(dayStart, taskForm.time), taskId: task._id })} secondary /></View>
               </View>
+              <Pressable accessibilityLabel={`Delete ${task.title}`} accessibilityRole="button" onPress={() => { setExpandedTask(null); removeTask({ taskId: task._id }); }} style={styles.deleteRow}>
+                <Ionicons color={colors.coral} name="trash-outline" size={18} />
+                <Text style={styles.deleteText}>Delete task</Text>
+              </Pressable>
             </View>
           ) : null}
           </Surface>
@@ -225,18 +230,25 @@ export default function CalendarScreen() {
       <Surface>
         {(calendar?.unscheduledTasks ?? []).map((task) => (
           <View key={task._id}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setSchedulingTask(schedulingTask === task._id ? null : task._id)}
-              style={styles.unscheduled}
-            >
-              <View style={styles.eventCopy}>
-                <Text style={styles.eventTitle}>{task.title}</Text>
-                <Text style={styles.eventTime}>Choose a time to schedule</Text>
-                {task.note ? <Text style={styles.eventTime}>{task.note}</Text> : null}
-              </View>
-              <Ionicons color={colors.primaryDark} name="calendar-outline" size={21} />
-            </Pressable>
+            <View style={styles.unscheduled}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setSchedulingTask(schedulingTask === task._id ? null : task._id)}
+                style={styles.grow}
+              >
+                <View style={styles.eventCopy}>
+                  <Text style={styles.eventTitle}>{task.title}</Text>
+                  <Text style={styles.eventTime}>Choose a time to schedule</Text>
+                  {task.note ? <Text style={styles.eventTime}>{task.note}</Text> : null}
+                </View>
+              </Pressable>
+              <Pressable accessibilityLabel={`Schedule ${task.title}`} accessibilityRole="button" onPress={() => setSchedulingTask(schedulingTask === task._id ? null : task._id)} style={styles.rowIcon}>
+                <Ionicons color={appearance.primaryDark} name="calendar-outline" size={21} />
+              </Pressable>
+              <Pressable accessibilityLabel={`Delete ${task.title}`} accessibilityRole="button" onPress={() => removeTask({ taskId: task._id })} style={styles.rowIcon}>
+                <Ionicons color={colors.coral} name="trash-outline" size={20} />
+              </Pressable>
+            </View>
             {schedulingTask === task._id ? (
               <View style={styles.taskActions}>
                 <ClockTimePicker value={taskForm.time} onChange={(time) => setTaskForm((current) => ({ ...current, time }))} />
@@ -354,7 +366,10 @@ const styles = StyleSheet.create({
   createToggleText: { color: colors.primaryDark, fontSize: 14, fontWeight: "700" },
   quickAdd: { gap: spacing.sm, padding: spacing.md },
   input: { borderColor: colors.border, borderRadius: 14, borderWidth: 1, color: colors.text, fontSize: 15, minHeight: 48, paddingHorizontal: spacing.md },
-  unscheduled: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 68 },
+  unscheduled: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 68, paddingRight: spacing.sm },
+  rowIcon: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
+  deleteRow: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center", minHeight: 44 },
+  deleteText: { color: colors.coral, fontSize: 14, fontWeight: "700" },
   emptyText: { color: colors.muted, fontSize: 14, padding: spacing.md },
   timeTrigger: {
     alignItems: "center",

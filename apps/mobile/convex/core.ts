@@ -558,6 +558,15 @@ export const undoCompleteTask = mutation({
   },
 });
 
+export const removeTask = mutation({
+  args: { taskId: v.id("tasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.taskId);
+    return null;
+  },
+});
+
 export const insights = query({
   args: { from: v.number(), to: v.number() },
   returns: v.object({
