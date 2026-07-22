@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 
 import { api } from "../convex/_generated/api";
-import { Mascot } from "../src/components/ui";
+import { Mascot, useAppearance } from "../src/components/ui";
 import { enqueueOffline, readLocalTimer, saveLocalTimer, type LocalTimer } from "../src/offlineQueue";
 import { colors, radii, spacing } from "../src/theme";
 
@@ -20,6 +20,7 @@ export default function FocusScreen() {
   const addManualFocus = useMutation(api.core.addManualFocus);
   const [localTimer, setLocalTimer] = useState<LocalTimer | null>(null);
   const [now, setNow] = useState(Date.now());
+  const appearance = useAppearance();
 
   useEffect(() => {
     readLocalTimer().then(setLocalTimer);
@@ -75,7 +76,7 @@ export default function FocusScreen() {
                 key={segment}
                 style={[
                   styles.ringSegment,
-                  segment < completedSegments && styles.ringSegmentDone,
+                  segment < completedSegments && [styles.ringSegmentDone, { backgroundColor: appearance.primary }],
                   { transform: [{ rotate: `${segment * 30}deg` }, { translateY: -100 }] },
                 ]}
               />
