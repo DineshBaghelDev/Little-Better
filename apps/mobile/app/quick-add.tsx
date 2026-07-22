@@ -265,7 +265,7 @@ export default function QuickAddModal() {
             <Text style={styles.title}>What would you like to add?</Text>
             <Text style={styles.subtitle}>Captured items update Today.</Text>
           </View>
-          <Mascot size={64} variant="working" />
+          <Mascot size={64} variant="excited" />
           <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={() => router.back()} style={styles.close}>
             <Ionicons color={colors.text} name="close" size={22} />
           </Pressable>

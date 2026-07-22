@@ -37,3 +37,39 @@ export const typography = {
   secondary: { fontSize: 12, lineHeight: 17 },
   micro: { fontSize: 11, lineHeight: 14 },
 };
+
+export const colorSchemes = {
+  sage: { label: "Sage", primary: colors.primary, primaryDark: colors.primaryDark, surface: colors.sageSurface },
+  teal: { label: "Teal", primary: "#7CC5C4", primaryDark: "#3F8583", surface: "#E5F6F5" },
+  lavender: { label: "Lavender", primary: colors.lavender, primaryDark: "#765AB5", surface: colors.lavenderSurface },
+  coral: { label: "Coral", primary: colors.coral, primaryDark: "#B95D4D", surface: colors.coralSurface },
+  mustard: { label: "Mustard", primary: colors.mustard, primaryDark: "#9E741B", surface: colors.mustardSurface },
+} as const;
+
+export const backgroundPatterns = {
+  none: "None",
+  sprouts: "Sprouts",
+  dots: "Dots",
+  stars: "Stars",
+} as const;
+
+export const navStyles = {
+  floating: "Floating",
+  classic: "Classic",
+  compact: "Compact",
+} as const;
+
+export type ColorScheme = keyof typeof colorSchemes;
+export type BackgroundPattern = keyof typeof backgroundPatterns;
+export type NavStyle = keyof typeof navStyles;
+
+export function resolveAppearance(settings?: {
+  backgroundPattern?: string;
+  colorScheme?: string;
+  navStyle?: string;
+} | null) {
+  const colorScheme = (settings?.colorScheme && settings.colorScheme in colorSchemes ? settings.colorScheme : "sage") as ColorScheme;
+  const backgroundPattern = (settings?.backgroundPattern && settings.backgroundPattern in backgroundPatterns ? settings.backgroundPattern : "sprouts") as BackgroundPattern;
+  const navStyle = (settings?.navStyle && settings.navStyle in navStyles ? settings.navStyle : "floating") as NavStyle;
+  return { ...colorSchemes[colorScheme], backgroundPattern, colorScheme, navStyle };
+}
