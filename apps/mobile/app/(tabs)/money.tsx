@@ -8,7 +8,7 @@ import { Doc, Id } from "../../convex/_generated/dataModel";
 import { CategoryDropdown } from "../../src/components/CategoryDropdown";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
-import { Mascot, SectionLabel, Surface } from "../../src/components/ui";
+import { Chip, Mascot, SectionLabel, Surface, useAppearance } from "../../src/components/ui";
 import { colors, radii, spacing } from "../../src/theme";
 
 type TransactionType = "expense" | "income";
@@ -20,7 +20,7 @@ const statusOptions = [
 ] satisfies { label: string; value: "pending" | "confirmed" }[];
 
 function moneyText(value: number) {
-  return `Rs ${value.toLocaleString("en-IN")}`;
+  return `₹${value.toLocaleString("en-IN")}`;
 }
 
 function parseDate(value: string) {
@@ -33,6 +33,7 @@ export default function MoneyScreen() {
   const updateTransaction = useMutation(api.core.updateTransaction);
   const removeTransaction = useMutation(api.core.removeTransaction);
   const money = useQuery(api.core.money, {});
+  const appearance = useAppearance();
   const [deeperOpen, setDeeperOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Id<"transactions"> | null>(null);
   const [expense, setExpense] = useState({
@@ -145,7 +146,7 @@ export default function MoneyScreen() {
           {moneyText(spent)} confirmed of {moneyText(budget)} this month
         </Text>
         <View style={styles.track}>
-          <View style={[styles.progress, overBudget && styles.progressOver, { width: `${progress}%` as `${number}%` }]} />
+          <View style={[styles.progress, { backgroundColor: appearance.primary }, overBudget && styles.progressOver, { width: `${progress}%` as `${number}%` }]} />
         </View>
       </View>
 
@@ -230,7 +231,7 @@ export default function MoneyScreen() {
             </View>
             <ScrollView contentContainerStyle={styles.modalContent} nestedScrollEnabled>
               {transactionFields()}
-              <Pressable accessibilityRole="button" onPress={saveTransaction} style={styles.addButton}>
+              <Pressable accessibilityRole="button" onPress={saveTransaction} style={[styles.addButton, { backgroundColor: appearance.primary }]}>
                 <Text style={styles.addButtonText}>Save changes</Text>
               </Pressable>
             </ScrollView>
@@ -291,14 +292,6 @@ function TransactionRow({
   );
 }
 
-function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   budget: { backgroundColor: colors.sageSurface, borderColor: colors.border, borderRadius: radii.card, borderWidth: 1, padding: spacing.lg },
   budgetOver: { backgroundColor: colors.coralSurface, borderColor: colors.coral },
@@ -310,10 +303,6 @@ const styles = StyleSheet.create({
   progressOver: { backgroundColor: colors.coral },
   used: { color: colors.primaryDark, fontSize: 13, fontWeight: "600", marginTop: spacing.sm },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
-  chipTextSelected: { color: colors.surface },
   grow: { flex: 1 },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 14, minHeight: 44, paddingHorizontal: spacing.sm },
   addButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.control, justifyContent: "center", minHeight: 48 },
