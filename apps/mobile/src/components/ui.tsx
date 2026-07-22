@@ -14,6 +14,11 @@ import {
 import { api } from "../../convex/_generated/api";
 import { colors, radii, resolveAppearance, spacing, typography } from "../theme";
 
+export function useAppearance() {
+  const settings = useQuery(api.core.settingsView);
+  return resolveAppearance(settings?.settings);
+}
+
 const mascotSheet = require("../../assets/sprout-spritesheet.png");
 const spritePositions = {
   calm: [0, 0],
@@ -53,8 +58,7 @@ export function PrimaryButton({
   onPress: () => void;
   secondary?: boolean;
 }) {
-  const settings = useQuery(api.core.settingsView);
-  const appearance = resolveAppearance(settings?.settings);
+  const appearance = useAppearance();
   return (
     <Pressable
       accessibilityRole="button"
@@ -69,6 +73,28 @@ export function PrimaryButton({
       <Text style={[styles.buttonText, secondary && styles.buttonTextSecondary]}>
         {label}
       </Text>
+    </Pressable>
+  );
+}
+
+export function Chip({
+  label,
+  onPress,
+  selected,
+}: {
+  label: string;
+  onPress: () => void;
+  selected: boolean;
+}) {
+  const appearance = useAppearance();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[styles.chip, selected && { backgroundColor: appearance.primary, borderColor: appearance.primary }]}
+    >
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
     </Pressable>
   );
 }
@@ -165,6 +191,9 @@ const styles = StyleSheet.create({
   buttonSecondary: { backgroundColor: colors.surface, borderColor: colors.border },
   buttonText: { color: colors.surface, ...typography.cardTitle },
   buttonTextSecondary: { color: colors.text },
+  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
+  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
+  chipTextSelected: { color: colors.surface },
   pressed: { opacity: 0.72 },
   row: {
     alignItems: "center",

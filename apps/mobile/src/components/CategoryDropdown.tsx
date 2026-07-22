@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { colors, radii, spacing } from "../theme";
+import { useAppearance } from "./ui";
 
 type Category = { _id: string; name: string };
 
@@ -19,13 +20,14 @@ export function CategoryDropdown({
   onSelect: (name: string) => void;
   selected: string;
 }) {
+  const appearance = useAppearance();
   const [open, setOpen] = useState(false);
   const [managing, setManaging] = useState(false);
 
   return (
     <View style={styles.container}>
       <Pressable accessibilityRole="button" onPress={() => setOpen((value) => !value)} style={styles.trigger}>
-        <Ionicons color={colors.primaryDark} name="pricetag-outline" size={20} />
+        <Ionicons color={appearance.primaryDark} name="pricetag-outline" size={20} />
         <View style={styles.grow}>
           <Text style={styles.label}>Category</Text>
           <Text style={styles.value}>{selected || "Choose category"}</Text>
@@ -46,7 +48,7 @@ export function CategoryDropdown({
                 style={styles.option}
               >
                 <Text style={styles.optionText}>{category.name}</Text>
-                {selected === category.name ? <Ionicons color={colors.primaryDark} name="checkmark" size={20} /> : null}
+                {selected === category.name ? <Ionicons color={appearance.primaryDark} name="checkmark" size={20} /> : null}
               </Pressable>
             ))}
             {manageable ? (

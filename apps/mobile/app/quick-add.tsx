@@ -10,7 +10,7 @@ import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { CategoryDropdown } from "../src/components/CategoryDropdown";
 import { DatePickerField, dateInput } from "../src/components/DatePickerField";
-import { Mascot, PrimaryButton, Surface } from "../src/components/ui";
+import { Chip, Mascot, PrimaryButton, Surface, useAppearance } from "../src/components/ui";
 import { enqueueOffline } from "../src/offlineQueue";
 import { colors, radii, spacing } from "../src/theme";
 
@@ -102,6 +102,7 @@ export default function QuickAddModal() {
   const moveUnfinishedTasks = useMutation(api.core.moveUnfinishedTasks);
   const startFocus = useMutation(api.core.startFocus);
   const money = useQuery(api.core.money, {});
+  const appearance = useAppearance();
   const [selected, setSelected] = useState<string | null>(null);
   const [expense, setExpense] = useState({
     accountId: undefined as Id<"accounts"> | undefined,
@@ -273,7 +274,7 @@ export default function QuickAddModal() {
 
         {selected ? (
           <View style={styles.confirmation}>
-            <Text style={styles.selectedLabel}>{selected}</Text>
+            <Text style={[styles.selectedLabel, { color: appearance.primaryDark }]}>{selected}</Text>
             {selected === "Expense" ? (
               <>
                 <View style={styles.chips}>
@@ -397,7 +398,7 @@ export default function QuickAddModal() {
             ) : (
               <>
                 {selected === "Voice" ? (
-                  <Pressable accessibilityRole="button" onPress={recognizing ? () => ExpoSpeechRecognitionModule.stop() : startVoiceCapture} style={styles.voiceButton}>
+                  <Pressable accessibilityRole="button" onPress={recognizing ? () => ExpoSpeechRecognitionModule.stop() : startVoiceCapture} style={[styles.voiceButton, { backgroundColor: appearance.primary }]}>
                     <Ionicons color={colors.surface} name={recognizing ? "stop" : "mic"} size={22} />
                     <Text style={styles.voiceButtonText}>{recognizing ? "Stop listening" : "Start voice capture"}</Text>
                   </Pressable>
@@ -446,7 +447,7 @@ export default function QuickAddModal() {
             <PrimaryButton label={selected === "Note" || selected === "Voice" ? "Confirm all" : selected === "Payment alert" ? "Detect payment" : selected === "Focus" || selected === "Expense" || selected === "Task" || value.trim() ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={save} />
             {syncMessage ? <Text style={styles.syncText}>{syncMessage}</Text> : null}
             <Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={styles.changeType}>
-              <Text style={styles.changeTypeText}>Choose another type</Text>
+              <Text style={[styles.changeTypeText, { color: appearance.primaryDark }]}>Choose another type</Text>
             </Pressable>
           </View>
         ) : (
@@ -500,16 +501,4 @@ const styles = StyleSheet.create({
   voiceButtonText: { color: colors.surface, fontSize: 15, fontWeight: "700" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   inline: { flexDirection: "row", gap: spacing.sm },
-  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
-  chipTextSelected: { color: colors.surface },
 });
-
-function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-    </Pressable>
-  );
-}
