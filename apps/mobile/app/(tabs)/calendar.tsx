@@ -153,7 +153,7 @@ export default function CalendarScreen() {
         ))}
         {!scheduled.length && !sessions.length ? (
           <Surface style={styles.empty}>
-            <Mascot size={88} variant="relaxed" />
+            <Mascot size={88} variant="planning" />
             <Text style={styles.eventTitle}>Nothing planned yet</Text>
             <Text style={styles.eventTime}>Add one task or schedule an unscheduled item.</Text>
           </Surface>

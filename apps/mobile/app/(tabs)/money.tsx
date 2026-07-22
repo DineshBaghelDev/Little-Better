@@ -132,7 +132,7 @@ export default function MoneyScreen() {
 
   return (
     <Screen
-      headerAction={<Mascot size={52} variant="working" />}
+      headerAction={<Mascot size={52} variant="money" />}
       subtitle="Budget, pending confirmations, and recent spend"
       title="Money"
     >
