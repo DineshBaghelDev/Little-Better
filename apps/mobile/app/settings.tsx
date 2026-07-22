@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
 import { router } from "expo-router";
-import { PropsWithChildren, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../convex/_generated/api";
@@ -84,6 +84,8 @@ export default function SettingsScreen() {
     router.back();
   }
 
+  const goalUnit = (targetOptions.find((option) => option.type === form.targetType)?.label ?? "").toLowerCase();
+
   return (
     <Screen
       headerAction={
@@ -91,19 +93,21 @@ export default function SettingsScreen() {
           <Ionicons color={colors.text} name="close" size={22} />
         </Pressable>
       }
-      subtitle="Focus, reflection, budget, and reminders"
+      subtitle="Set your habit goal, daily times, and budget"
       title="Settings"
     >
+      <SectionLabel>Your focus goal</SectionLabel>
       <Surface style={styles.form}>
-        <Field help="This is the habit or life area shown on Today and Progress." label="Focus area">
-          <TextInput accessibilityLabel="Tracked focus category" onChangeText={(focusName) => setForm((current) => ({ ...current, focusName }))} placeholder="Study" placeholderTextColor={colors.muted} style={styles.input} value={form.focusName} />
-        </Field>
-        <Field help="The number to hit for the goal type below, like 3 sessions or 120 minutes." label="Target value">
-          <TextInput accessibilityLabel="Target value" keyboardType="number-pad" onChangeText={(targetValue) => setForm((current) => ({ ...current, targetValue }))} placeholder="3" placeholderTextColor={colors.muted} style={styles.input} value={form.targetValue} />
-        </Field>
+        <Text style={styles.summary}>
+          You&apos;re aiming for {form.targetValue || "3"} {goalUnit} of {(form.focusName || "your focus").trim()}.
+        </Text>
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Goal type</Text>
-          <Text style={styles.fieldHelp}>Choose how Little Better decides your focus goal is complete.</Text>
+          <Text style={styles.fieldLabel}>What are you working on?</Text>
+          <TextInput accessibilityLabel="Tracked focus category" onChangeText={(focusName) => setForm((current) => ({ ...current, focusName }))} placeholder="e.g. Study, Gym, Reading" placeholderTextColor={colors.muted} style={styles.input} value={form.focusName} />
+          <Text style={styles.fieldHelp}>Your one habit or life area. It shows on Today and Progress.</Text>
+        </View>
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>How do you want to measure it?</Text>
           <View style={styles.options}>
             {targetOptions.map((option) => (
               <Pressable
@@ -122,26 +126,42 @@ export default function SettingsScreen() {
             ))}
           </View>
         </View>
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Your goal</Text>
+          <View style={styles.amountRow}>
+            <TextInput accessibilityLabel="Goal amount" keyboardType="number-pad" onChangeText={(targetValue) => setForm((current) => ({ ...current, targetValue }))} placeholder="3" placeholderTextColor={colors.muted} style={styles.amountInput} value={form.targetValue} />
+            <Text style={styles.amountSuffix}>{goalUnit}</Text>
+          </View>
+        </View>
+      </Surface>
+
+      <SectionLabel>Daily times</SectionLabel>
+      <Surface style={styles.form}>
         <HourField
-          help="When Little Better nudges you to start your focus session."
-          label="Preferred focus time"
+          help="When we nudge you to start your focus session."
+          label="Focus reminder"
           onChange={(hour) => setForm((current) => ({ ...current, preferredHour: String(hour) }))}
           value={Number(form.preferredHour) || 9}
         />
         <HourField
-          help="Evening reflection reminder. Available from 5 PM to 11 PM."
-          label="Reflection time"
+          help="Evening check-in on how your day went. Between 5 PM and 11 PM."
+          label="Reflection reminder"
           maxHour={23}
           minHour={17}
           onChange={(hour) => setForm((current) => ({ ...current, reflectionHour: String(hour) }))}
           value={Number(form.reflectionHour) || 20}
         />
-        <Field help="Monthly spending limit used by Money alerts and Progress summaries." label="Monthly budget">
+      </Surface>
+
+      <SectionLabel>Monthly budget</SectionLabel>
+      <Surface style={styles.form}>
+        <View style={styles.field}>
           <View style={styles.amountRow}>
             <Text style={styles.amountPrefix}>₹</Text>
             <TextInput accessibilityLabel="Monthly budget" keyboardType="number-pad" onChangeText={(monthlyBudget) => setForm((current) => ({ ...current, monthlyBudget }))} placeholder="10000" placeholderTextColor={colors.muted} style={styles.amountInput} value={form.monthlyBudget} />
           </View>
-        </Field>
+          <Text style={styles.fieldHelp}>Used by Money alerts and Progress summaries.</Text>
+        </View>
         <PrimaryButton label="Save settings" onPress={save} />
       </Surface>
 
@@ -237,33 +257,23 @@ function ChoiceGroup({
   );
 }
 
-function Field({ children, help, label }: PropsWithChildren<{ help: string; label: string }>) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {children}
-      <Text style={styles.fieldHelp}>{help}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   iconButton: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
   form: { gap: spacing.md, padding: spacing.md },
+  summary: { color: colors.text, fontSize: 15, fontWeight: "700", lineHeight: 21 },
   field: { gap: spacing.xs },
   fieldLabel: { color: colors.text, fontSize: 14, fontWeight: "700" },
   fieldHelp: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 15, minHeight: 48, paddingHorizontal: spacing.md },
   amountRow: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", minHeight: 48, paddingHorizontal: spacing.md },
   amountPrefix: { color: colors.muted, fontSize: 15, fontWeight: "700", marginRight: spacing.xs },
+  amountSuffix: { color: colors.muted, fontSize: 13, fontWeight: "600", marginLeft: spacing.xs },
   amountInput: { color: colors.text, flex: 1, fontSize: 15 },
   options: { gap: spacing.sm },
   option: { alignItems: "center", borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 64, padding: spacing.md },
-  optionSelected: { backgroundColor: colors.sageSurface, borderColor: colors.primary },
   optionTitle: { color: colors.text, fontSize: 14, fontWeight: "700" },
   choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   choice: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, flexDirection: "row", gap: spacing.xs, minHeight: 42, paddingHorizontal: spacing.md },
-  choiceSelected: { backgroundColor: colors.sageSurface, borderColor: colors.primary },
   choiceText: { color: colors.text, fontSize: 13, fontWeight: "700" },
   swatch: { borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, height: 18, width: 18 },
   notice: { gap: spacing.xs, padding: spacing.md },

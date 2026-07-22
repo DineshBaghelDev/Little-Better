@@ -106,12 +106,14 @@ export default function CalendarScreen() {
                 accessibilityRole="button"
                 key={value}
                 onPress={() => setSelectedDate(value)}
-                style={[styles.day, selected && { backgroundColor: appearance.primary }]}
+                style={styles.dayCell}
               >
-                <Text style={[styles.dayName, selected && styles.dayTextSelected]}>
-                  {day.toLocaleDateString([], { weekday: "short" }).slice(0, 1)}
-                </Text>
-                <Text style={[styles.date, selected && styles.dayTextSelected]}>{day.getDate()}</Text>
+                <View style={[styles.dayPill, selected && { backgroundColor: appearance.primary }]}>
+                  <Text style={[styles.dayName, selected && styles.dayTextSelected]}>
+                    {day.toLocaleDateString([], { weekday: "short" }).slice(0, 1)}
+                  </Text>
+                  <Text style={[styles.date, selected && styles.dayTextSelected]}>{day.getDate()}</Text>
+                </View>
               </Pressable>
             );
           })}
@@ -332,9 +334,9 @@ function ClockTimePicker({ onChange, value }: { onChange: (value: string) => voi
 const styles = StyleSheet.create({
   headerIcon: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
   weekNav: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
-  week: { flexDirection: "row", justifyContent: "space-between" },
-  day: { alignItems: "center", borderRadius: 22, gap: 6, minHeight: 64, paddingHorizontal: 10, paddingVertical: 8 },
-  daySelected: { backgroundColor: colors.primary },
+  week: { flex: 1, flexDirection: "row" },
+  dayCell: { alignItems: "center", flex: 1 },
+  dayPill: { alignItems: "center", borderRadius: 22, gap: 6, justifyContent: "center", minHeight: 64, width: 42 },
   dayName: { color: colors.muted, fontSize: 11, fontWeight: "600" },
   date: { color: colors.text, fontSize: 14, fontWeight: "700" },
   dayTextSelected: { color: colors.surface },
