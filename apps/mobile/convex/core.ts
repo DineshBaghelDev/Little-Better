@@ -561,16 +561,22 @@ export const undoCompleteTask = mutation({
 export const insights = query({
   args: { from: v.number(), to: v.number() },
   returns: v.object({
+    activeDays: v.number(),
     appliedInsight: v.union(weeklyInsight, v.null()),
+    avgSessionMinutes: v.number(),
+    avgSpendPerDay: v.number(),
     categorySummary: v.array(v.object({ amount: v.number(), category: v.string() })),
     completedTasks: v.number(),
     currentInsight: v.union(weeklyInsightPreview, v.null()),
     focusCategoryName: v.string(),
     focusMinutes: v.number(),
     focusSessions: v.number(),
+    income: v.number(),
     insightRequirement: v.union(v.string(), v.null()),
+    net: v.number(),
     reflectionSummary: v.array(v.object({ count: v.number(), tag: v.string() })),
     spent: v.number(),
+    trend: v.array(v.object({ bucketMs: v.number(), minutes: v.number(), sessions: v.number(), spent: v.number(), start: v.number() })),
   }),
   handler: async (ctx, args) => {
     const from = Math.max(0, Math.min(args.from, args.to));
@@ -618,6 +624,7 @@ export const insights = query({
       .take(1);
     const focusMinutes = sessions.reduce((total, session) => total + session.durationMinutes, 0);
     const expenses = transactions.filter((item) => (item.type ?? "expense") === "expense");
+    const incomes = transactions.filter((item) => (item.type ?? "expense") === "income");
     const categoryTotals = new Map<string, number>();
     for (const item of expenses) categoryTotals.set(item.category, (categoryTotals.get(item.category) ?? 0) + item.amount);
     const tagTotals = new Map<string, number>();
@@ -626,8 +633,34 @@ export const insights = query({
     }
     const computed = currentInsight || dismissedInsight ? { insight: null, requirement: null } : computedFocusTimeInsight(focus, sessions);
 
+    // Bucket focus minutes and spend across the range so the screen can draw a trend.
+    const spanMs = Math.max(1, to - from);
+    const spanDays = Math.ceil(spanMs / (24 * MS_PER_HOUR));
+    const bucketMs = spanDays <= 14 ? 24 * MS_PER_HOUR : spanDays <= 92 ? 7 * 24 * MS_PER_HOUR : 30 * 24 * MS_PER_HOUR;
+    const bucketCount = Math.max(1, Math.min(24, Math.ceil(spanMs / bucketMs)));
+    const trend = Array.from({ length: bucketCount }, (_, index) => ({
+      bucketMs,
+      minutes: 0,
+      sessions: 0,
+      spent: 0,
+      start: from + index * bucketMs,
+    }));
+    const bucketFor = (time: number) => Math.max(0, Math.min(bucketCount - 1, Math.floor((time - from) / bucketMs)));
+    for (const session of sessions) {
+      const bucket = trend[bucketFor(session.completedAt)];
+      bucket.minutes += session.durationMinutes;
+      bucket.sessions += 1;
+    }
+    for (const item of expenses) trend[bucketFor(item.occurredAt)].spent += item.amount;
+
+    const spent = expenses.reduce((total, item) => total + item.amount, 0);
+    const activeDays = new Set(sessions.map((session) => localDateKey(session.completedAt))).size;
+
     return {
+      activeDays,
       appliedInsight: appliedInsight ?? null,
+      avgSessionMinutes: sessions.length ? Math.round(focusMinutes / sessions.length) : 0,
+      avgSpendPerDay: Math.round(spent / Math.max(1, spanDays)),
       categorySummary: [...categoryTotals.entries()]
         .map(([category, amount]) => ({ amount, category }))
         .sort((a, b) => b.amount - a.amount)
@@ -637,12 +670,15 @@ export const insights = query({
       focusCategoryName: focus?.name ?? "Focus",
       focusMinutes,
       focusSessions: sessions.length,
+      income: incomes.reduce((total, item) => total + item.amount, 0),
       insightRequirement: computed.requirement,
+      net: incomes.reduce((total, item) => total + item.amount, 0) - spent,
       reflectionSummary: [...tagTotals.entries()]
         .map(([tag, count]) => ({ count, tag }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5),
-      spent: expenses.reduce((total, item) => total + item.amount, 0),
+      spent,
+      trend,
     };
   },
 });
