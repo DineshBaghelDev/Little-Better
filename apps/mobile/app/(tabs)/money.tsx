@@ -181,7 +181,7 @@ export default function MoneyScreen() {
         ))}
         {money?.confirmed.length === 0 ? (
           <View style={styles.emptyMascot}>
-            <Mascot size={72} variant="watering" />
+            <Mascot size={124} variant="watering" />
             <Text style={styles.emptyText}>No confirmed transactions yet.</Text>
           </View>
         ) : null}
