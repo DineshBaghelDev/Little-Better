@@ -63,7 +63,7 @@ export default function ReflectionScreen() {
         </Pressable>
         <Text style={styles.title}>What affected your day?</Text>
         <Text style={styles.subtitle}>Pick all that apply.</Text>
-        <View style={styles.mascot}><Mascot size={132} variant="reflection" /></View>
+        <View style={styles.mascot}><Mascot size={160} variant="reflection" /></View>
 
         <View style={styles.options}>
           {descriptors.map(([label, icon, background]) => {

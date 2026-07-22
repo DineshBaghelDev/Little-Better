@@ -62,7 +62,7 @@ export default function OnboardingScreen() {
         <Text style={styles.promise}>One focus. One weekly improvement.</Text>
 
         <View style={styles.mascotWrap}>
-          <Mascot size={156} />
+          <Mascot size={184} variant="watering" />
         </View>
 
         <View>

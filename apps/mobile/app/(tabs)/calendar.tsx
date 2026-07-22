@@ -169,7 +169,7 @@ export default function CalendarScreen() {
         ))}
         {!scheduled.length && !sessions.length ? (
           <Surface style={styles.empty}>
-            <Mascot size={88} variant="planning" />
+            <Mascot size={136} variant="planning" />
             <Text style={styles.eventTitle}>Nothing planned yet</Text>
             <Text style={styles.eventTime}>Add one task or schedule an unscheduled item.</Text>
           </Surface>
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   eventCopy: { flex: 1, padding: spacing.md },
   eventTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
   eventTime: { color: colors.muted, fontSize: 12, marginTop: spacing.xs },
-  empty: { alignItems: "center", padding: spacing.md },
+  empty: { alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
   taskActions: { gap: spacing.sm, padding: spacing.md },
   actionRow: { flexDirection: "row", gap: spacing.sm },
   grow: { flex: 1 },

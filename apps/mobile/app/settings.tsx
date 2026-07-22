@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { api } from "../convex/_generated/api";
 import { HourField } from "../src/components/HourField";
 import { Screen } from "../src/components/Screen";
-import { PrimaryButton, SectionLabel, Surface, useAppearance } from "../src/components/ui";
+import { Mascot, PrimaryButton, SectionLabel, Surface, useAppearance } from "../src/components/ui";
 import { backgroundPatterns, colorSchemes, colors, navStyles, radii, spacing } from "../src/theme";
 
 type TargetType = "sessions_per_week" | "minutes_per_day" | "minutes_per_week" | "binary_days";
@@ -96,6 +96,14 @@ export default function SettingsScreen() {
       subtitle="Set your habit goal, daily times, and budget"
       title="Settings"
     >
+      <Surface style={[styles.hero, { backgroundColor: appearance.surface }]}>
+        <Mascot size={120} variant="relaxed" />
+        <View style={styles.grow}>
+          <Text style={styles.heroTitle}>One thing at a time</Text>
+          <Text style={styles.heroMeta}>Tune your plan below. Sprout keeps the rest simple.</Text>
+        </View>
+      </Surface>
+
       <SectionLabel>Your focus goal</SectionLabel>
       <Surface style={styles.form}>
         <Text style={styles.summary}>
@@ -260,6 +268,9 @@ function ChoiceGroup({
 const styles = StyleSheet.create({
   iconButton: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
   form: { gap: spacing.md, padding: spacing.md },
+  hero: { alignItems: "center", backgroundColor: colors.sageSurface, flexDirection: "row", gap: spacing.md, padding: spacing.md },
+  heroTitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  heroMeta: { color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: spacing.xs },
   summary: { color: colors.text, fontSize: 15, fontWeight: "700", lineHeight: 21 },
   field: { gap: spacing.xs },
   fieldLabel: { color: colors.text, fontSize: 14, fontWeight: "700" },
