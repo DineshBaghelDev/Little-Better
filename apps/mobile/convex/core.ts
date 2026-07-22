@@ -12,6 +12,9 @@ const targetType = v.union(
   v.literal("minutes_per_week"),
   v.literal("binary_days"),
 );
+const colorScheme = v.union(v.literal("sage"), v.literal("teal"), v.literal("lavender"), v.literal("coral"), v.literal("mustard"));
+const backgroundPattern = v.union(v.literal("none"), v.literal("sprouts"), v.literal("dots"), v.literal("stars"));
+const navStyle = v.union(v.literal("floating"), v.literal("classic"), v.literal("compact"));
 
 const focusCategory = v.object({
   _id: v.id("focusCategories"),
@@ -81,8 +84,11 @@ const activeTimer = v.object({
 const settings = v.object({
   _id: v.id("appSettings"),
   _creationTime: v.number(),
+  backgroundPattern: v.optional(backgroundPattern),
+  colorScheme: v.optional(colorScheme),
   focusCategoryId: v.id("focusCategories"),
   monthlyBudget: v.number(),
+  navStyle: v.optional(navStyle),
   notificationsEnabled: v.optional(v.boolean()),
   onboardedAt: v.number(),
   reflectionHour: v.number(),
@@ -316,8 +322,11 @@ export const bootstrap = mutation({
       targetValue: Math.max(1, Math.min(1000, Math.round(args.targetValue))),
     });
     await ctx.db.insert("appSettings", {
+      backgroundPattern: "sprouts",
+      colorScheme: "sage",
       focusCategoryId: categoryId,
       monthlyBudget: Math.max(0, args.monthlyBudget),
+      navStyle: "floating",
       notificationsEnabled: args.notificationsEnabled,
       onboardedAt: now,
       reflectionHour: Math.max(17, Math.min(23, Math.round(args.reflectionHour))),
@@ -482,8 +491,11 @@ export const settingsView = query({
 
 export const updateSettings = mutation({
   args: {
+    backgroundPattern: v.optional(backgroundPattern),
+    colorScheme: v.optional(colorScheme),
     focusName: v.string(),
     monthlyBudget: v.number(),
+    navStyle: v.optional(navStyle),
     notificationsEnabled: v.optional(v.boolean()),
     preferredHour: v.number(),
     reflectionHour: v.number(),
@@ -516,8 +528,11 @@ export const updateSettings = mutation({
     }
 
     await ctx.db.patch(settingsDoc._id, {
+      backgroundPattern: args.backgroundPattern,
+      colorScheme: args.colorScheme,
       focusCategoryId,
       monthlyBudget: Math.max(0, Math.round(args.monthlyBudget)),
+      navStyle: args.navStyle,
       notificationsEnabled: args.notificationsEnabled,
       reflectionHour: Math.max(17, Math.min(23, Math.round(args.reflectionHour))),
     });

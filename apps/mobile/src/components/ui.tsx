@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useQuery } from "convex/react";
 import { PropsWithChildren, ReactNode } from "react";
 import {
   Image,
@@ -10,21 +11,30 @@ import {
   ViewStyle,
 } from "react-native";
 
-import { colors, radii, spacing, typography } from "../theme";
+import { api } from "../../convex/_generated/api";
+import { colors, radii, resolveAppearance, spacing, typography } from "../theme";
 
 const mascotSheet = require("../../assets/sprout-spritesheet.png");
 const spritePositions = {
   calm: [0, 0],
-  complete: [2, 0],
-  focus: [1, 1],
+  calendar: [2, 2],
+  celebrating: [1, 1],
+  complete: [1, 1],
+  excited: [1, 0],
+  focus: [2, 0],
+  money: [1, 2],
+  planning: [2, 2],
   pointing: [0, 1],
-  proud: [2, 0],
-  relaxed: [1, 1],
-  reflection: [1, 1],
+  proud: [3, 0],
+  reflection: [3, 2],
+  relaxed: [3, 1],
+  sleepy: [0, 2],
   watering: [0, 1],
   working: [2, 1],
 } as const;
 const spriteFrameSize = 512;
+const spriteColumns = 4;
+const spriteRows = 3;
 type MascotVariant = keyof typeof spritePositions;
 
 export function Surface({
@@ -43,12 +53,15 @@ export function PrimaryButton({
   onPress: () => void;
   secondary?: boolean;
 }) {
+  const settings = useQuery(api.core.settingsView);
+  const appearance = resolveAppearance(settings?.settings);
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
+        { backgroundColor: appearance.primary, borderColor: appearance.primary },
         secondary && styles.buttonSecondary,
         pressed && styles.pressed,
       ]}
@@ -119,12 +132,12 @@ export function Mascot({
       <Image
         source={mascotSheet}
         style={{
-          height: spriteFrameSize * 2 * scale,
+          height: spriteFrameSize * spriteRows * scale,
           transform: [
             { translateX: -column * spriteFrameSize * scale },
             { translateY: -row * spriteFrameSize * scale },
           ],
-          width: spriteFrameSize * 3 * scale,
+          width: spriteFrameSize * spriteColumns * scale,
         }}
       />
     </View>
