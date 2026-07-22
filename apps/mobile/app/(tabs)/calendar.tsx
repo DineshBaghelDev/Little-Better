@@ -23,6 +23,11 @@ function parseDate(value: string) {
   return year && month && day ? new Date(year, month - 1, day).getTime() : Date.now();
 }
 
+function timeString(ms: number) {
+  const date = new Date(ms);
+  return `${`${date.getHours()}`.padStart(2, "0")}:${`${date.getMinutes()}`.padStart(2, "0")}`;
+}
+
 function weekStartFor(value: number) {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);
@@ -119,7 +124,15 @@ export default function CalendarScreen() {
       <View style={styles.events}>
         {scheduled.map((task) => (
           <Surface key={task._id}>
-          <Pressable accessibilityRole="button" onPress={() => setExpandedTask(expandedTask === task._id ? null : task._id)} style={styles.event}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              const opening = expandedTask !== task._id;
+              if (opening && task.scheduledAt) setTaskForm((current) => ({ ...current, time: timeString(task.scheduledAt ?? dayStart) }));
+              setExpandedTask(opening ? task._id : null);
+            }}
+            style={styles.event}
+          >
             <View style={[styles.eventRail, { backgroundColor: colors.primary }]} />
             <View style={styles.eventCopy}>
               <Text style={styles.eventTitle}>{task.title}</Text>

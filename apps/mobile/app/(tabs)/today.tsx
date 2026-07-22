@@ -65,6 +65,12 @@ export default function TodayTabScreen() {
   }, []);
 
   useEffect(() => {
+    if (!lastCompleted) return;
+    const timeout = setTimeout(() => setLastCompleted(null), 5000);
+    return () => clearTimeout(timeout);
+  }, [lastCompleted]);
+
+  useEffect(() => {
     if (!today?.settings?.notificationsEnabled) return;
     const now = Date.now();
     const reminders = [];
@@ -274,7 +280,7 @@ export default function TodayTabScreen() {
             <Ionicons color={colors.muted} name="time-outline" size={20} />
             <View style={styles.grow}>
               <Text style={styles.cardTitle}>Later today</Text>
-              <Text style={styles.meta}>{today.laterToday.length} tasks</Text>
+              <Text style={styles.meta}>{today.laterToday.length} {today.laterToday.length === 1 ? "task" : "tasks"}</Text>
             </View>
             <Ionicons color={colors.muted} name={laterOpen ? "chevron-up" : "chevron-down"} size={18} />
           </Pressable>
