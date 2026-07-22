@@ -10,7 +10,7 @@ import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import { CategoryDropdown } from "../src/components/CategoryDropdown";
 import { DatePickerField, dateInput } from "../src/components/DatePickerField";
-import { PrimaryButton, Surface } from "../src/components/ui";
+import { Mascot, PrimaryButton, Surface } from "../src/components/ui";
 import { enqueueOffline } from "../src/offlineQueue";
 import { colors, radii, spacing } from "../src/theme";
 
@@ -261,10 +261,11 @@ export default function QuickAddModal() {
       <SafeAreaView edges={["bottom"]} style={styles.sheet}>
         <View style={styles.handle} />
         <View style={styles.headingRow}>
-          <View>
+          <View style={styles.headingCopy}>
             <Text style={styles.title}>What would you like to add?</Text>
             <Text style={styles.subtitle}>Captured items update Today.</Text>
           </View>
+          <Mascot size={64} variant="working" />
           <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={() => router.back()} style={styles.close}>
             <Ionicons color={colors.text} name="close" size={22} />
           </Pressable>
@@ -475,6 +476,7 @@ const styles = StyleSheet.create({
   sheet: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg },
   handle: { alignSelf: "center", backgroundColor: colors.border, borderRadius: radii.pill, height: 4, marginBottom: spacing.lg, width: 48 },
   headingRow: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.lg },
+  headingCopy: { flex: 1 },
   title: { color: colors.text, fontSize: 20, fontWeight: "700" },
   subtitle: { color: colors.muted, fontSize: 13, marginTop: spacing.xs },
   close: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
