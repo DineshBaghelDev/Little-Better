@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, radii, spacing } from "../theme";
+import { useAppearance } from "./ui";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -35,6 +36,7 @@ export function DatePickerField({
   onChange: (value: string) => void;
   value: string;
 }) {
+  const appearance = useAppearance();
   const selected = useMemo(() => startOfDay(parseDateInput(value)), [value]);
   const [open, setOpen] = useState(defaultOpen);
   const [cursor, setCursor] = useState(() => {
@@ -56,7 +58,7 @@ export function DatePickerField({
   return (
     <View>
       <Pressable accessibilityRole="button" onPress={() => setOpen((value) => !value)} style={styles.trigger}>
-        <Ionicons color={colors.primaryDark} name="calendar-outline" size={20} />
+        <Ionicons color={appearance.primaryDark} name="calendar-outline" size={20} />
         <View style={styles.grow}>
           <Text style={styles.label}>{label}</Text>
           <Text style={styles.value}>{dateInput(selected)}</Text>
@@ -68,11 +70,11 @@ export function DatePickerField({
           <Pressable accessibilityRole="none" onPress={(event) => event.stopPropagation()} style={styles.calendar}>
             <View style={styles.header}>
               <Pressable accessibilityRole="button" onPress={() => moveMonth(-1)} style={styles.iconButton}>
-                <Ionicons color={colors.primaryDark} name="chevron-back" size={20} />
+                <Ionicons color={appearance.primaryDark} name="chevron-back" size={20} />
               </Pressable>
               <Text style={styles.month}>{cursorDate.toLocaleDateString([], { month: "long", year: "numeric" })}</Text>
               <Pressable accessibilityRole="button" onPress={() => moveMonth(1)} style={styles.iconButton}>
-                <Ionicons color={colors.primaryDark} name="chevron-forward" size={20} />
+                <Ionicons color={appearance.primaryDark} name="chevron-forward" size={20} />
               </Pressable>
             </View>
             <View style={styles.grid}>
@@ -89,7 +91,7 @@ export function DatePickerField({
                       onChange(dateInput(time));
                       setOpen(false);
                     }}
-                    style={[styles.day, isSelected && styles.daySelected]}
+                    style={[styles.day, isSelected && { backgroundColor: appearance.primary }]}
                   >
                     <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{date?.getDate() ?? ""}</Text>
                   </Pressable>
@@ -104,7 +106,7 @@ export function DatePickerField({
               }}
               style={styles.today}
             >
-              <Text style={styles.todayText}>Today</Text>
+              <Text style={[styles.todayText, { color: appearance.primaryDark }]}>Today</Text>
             </Pressable>
           </Pressable>
         </Pressable>

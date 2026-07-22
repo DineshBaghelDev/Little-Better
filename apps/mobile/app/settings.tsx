@@ -5,8 +5,9 @@ import { PropsWithChildren, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../convex/_generated/api";
+import { HourField } from "../src/components/HourField";
 import { Screen } from "../src/components/Screen";
-import { PrimaryButton, SectionLabel, Surface } from "../src/components/ui";
+import { PrimaryButton, SectionLabel, Surface, useAppearance } from "../src/components/ui";
 import { backgroundPatterns, colorSchemes, colors, navStyles, radii, spacing } from "../src/theme";
 
 type TargetType = "sessions_per_week" | "minutes_per_day" | "minutes_per_week" | "binary_days";
@@ -37,6 +38,7 @@ const targetOptions = [
 export default function SettingsScreen() {
   const settings = useQuery(api.core.settingsView);
   const updateSettings = useMutation(api.core.updateSettings);
+  const appearance = useAppearance();
   const [form, setForm] = useState({
     backgroundPattern: "sprouts",
     colorScheme: "sage",
@@ -109,25 +111,36 @@ export default function SettingsScreen() {
                 accessibilityState={{ selected: form.targetType === option.type }}
                 key={option.type}
                 onPress={() => setForm((current) => ({ ...current, targetType: option.type }))}
-                style={[styles.option, form.targetType === option.type && styles.optionSelected]}
+                style={[styles.option, form.targetType === option.type && { backgroundColor: appearance.surface, borderColor: appearance.primary }]}
               >
                 <View style={styles.grow}>
                   <Text style={styles.optionTitle}>{option.label}</Text>
                   <Text style={styles.meta}>{option.description}</Text>
                 </View>
-                {form.targetType === option.type ? <Ionicons color={colors.primaryDark} name="checkmark" size={20} /> : null}
+                {form.targetType === option.type ? <Ionicons color={appearance.primaryDark} name="checkmark" size={20} /> : null}
               </Pressable>
             ))}
           </View>
         </View>
-        <Field help="Use 24-hour time for your focus reminder. Example: 17 means 5 PM." label="Preferred focus hour">
-          <TextInput accessibilityLabel="Preferred focus hour" keyboardType="number-pad" onChangeText={(preferredHour) => setForm((current) => ({ ...current, preferredHour }))} placeholder="9" placeholderTextColor={colors.muted} style={styles.input} value={form.preferredHour} />
-        </Field>
-        <Field help="Use 17 to 23. This controls the evening reflection reminder." label="Reflection hour">
-          <TextInput accessibilityLabel="Evening reflection hour" keyboardType="number-pad" onChangeText={(reflectionHour) => setForm((current) => ({ ...current, reflectionHour }))} placeholder="20" placeholderTextColor={colors.muted} style={styles.input} value={form.reflectionHour} />
-        </Field>
+        <HourField
+          help="When Little Better nudges you to start your focus session."
+          label="Preferred focus time"
+          onChange={(hour) => setForm((current) => ({ ...current, preferredHour: String(hour) }))}
+          value={Number(form.preferredHour) || 9}
+        />
+        <HourField
+          help="Evening reflection reminder. Available from 5 PM to 11 PM."
+          label="Reflection time"
+          maxHour={23}
+          minHour={17}
+          onChange={(hour) => setForm((current) => ({ ...current, reflectionHour: String(hour) }))}
+          value={Number(form.reflectionHour) || 20}
+        />
         <Field help="Monthly spending limit used by Money alerts and Progress summaries." label="Monthly budget">
-          <TextInput accessibilityLabel="Monthly budget" keyboardType="number-pad" onChangeText={(monthlyBudget) => setForm((current) => ({ ...current, monthlyBudget }))} placeholder="10000" placeholderTextColor={colors.muted} style={styles.input} value={form.monthlyBudget} />
+          <View style={styles.amountRow}>
+            <Text style={styles.amountPrefix}>₹</Text>
+            <TextInput accessibilityLabel="Monthly budget" keyboardType="number-pad" onChangeText={(monthlyBudget) => setForm((current) => ({ ...current, monthlyBudget }))} placeholder="10000" placeholderTextColor={colors.muted} style={styles.amountInput} value={form.monthlyBudget} />
+          </View>
         </Field>
         <PrimaryButton label="Save settings" onPress={save} />
       </Surface>
@@ -166,7 +179,7 @@ export default function SettingsScreen() {
             <Text style={styles.title}>Reminders</Text>
             <Text style={styles.meta}>Tasks, focus, reflection, pending expenses, and weekly insights.</Text>
           </View>
-          <Ionicons color={form.notificationsEnabled ? colors.primaryDark : colors.muted} name={form.notificationsEnabled ? "toggle" : "toggle-outline"} size={32} />
+          <Ionicons color={form.notificationsEnabled ? appearance.primaryDark : colors.muted} name={form.notificationsEnabled ? "toggle" : "toggle-outline"} size={32} />
         </Pressable>
         <View style={styles.notice}>
           <Text style={styles.meta}>If permission is denied, Today, Money, and Progress remain the manual fallback.</Text>
@@ -183,7 +196,7 @@ export default function SettingsScreen() {
                 {category.targetValue ?? 1} {targetOptions.find((option) => option.type === category.targetType)?.label ?? "target"}
               </Text>
             </View>
-            {settings?.settings?.focusCategoryId === category._id ? <Text style={styles.active}>Active</Text> : null}
+            {settings?.settings?.focusCategoryId === category._id ? <Text style={[styles.active, { color: appearance.primaryDark }]}>Active</Text> : null}
           </View>
         ))}
       </Surface>
@@ -202,6 +215,7 @@ function ChoiceGroup({
   options: { color?: string; label: string; value: string }[];
   selected: string;
 }) {
+  const appearance = useAppearance();
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -212,7 +226,7 @@ function ChoiceGroup({
             accessibilityState={{ selected: selected === option.value }}
             key={option.value}
             onPress={() => onSelect(option.value)}
-            style={[styles.choice, selected === option.value && styles.choiceSelected]}
+            style={[styles.choice, selected === option.value && { backgroundColor: appearance.surface, borderColor: appearance.primary }]}
           >
             {option.color ? <View style={[styles.swatch, { backgroundColor: option.color }]} /> : null}
             <Text style={styles.choiceText}>{option.label}</Text>
@@ -240,6 +254,9 @@ const styles = StyleSheet.create({
   fieldLabel: { color: colors.text, fontSize: 14, fontWeight: "700" },
   fieldHelp: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 15, minHeight: 48, paddingHorizontal: spacing.md },
+  amountRow: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", minHeight: 48, paddingHorizontal: spacing.md },
+  amountPrefix: { color: colors.muted, fontSize: 15, fontWeight: "700", marginRight: spacing.xs },
+  amountInput: { color: colors.text, flex: 1, fontSize: 15 },
   options: { gap: spacing.sm },
   option: { alignItems: "center", borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 64, padding: spacing.md },
   optionSelected: { backgroundColor: colors.sageSurface, borderColor: colors.primary },

@@ -7,7 +7,7 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
-import { Mascot, PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
+import { Chip, Mascot, PrimaryButton, SectionLabel, Surface, useAppearance } from "../../src/components/ui";
 import { colors, radii, spacing } from "../../src/theme";
 
 type RangePreset = "day" | "week" | "month" | "year" | "custom";
@@ -30,7 +30,7 @@ function rangeFor(preset: RangePreset, customFrom: string, customTo: string) {
 }
 
 function moneyText(value: number) {
-  return `Rs ${value.toLocaleString("en-IN")}`;
+  return `₹${value.toLocaleString("en-IN")}`;
 }
 
 export default function ProgressScreen() {
@@ -39,6 +39,7 @@ export default function ProgressScreen() {
   const [customTo, setCustomTo] = useState(dateInput(Date.now()));
   const [editingInsight, setEditingInsight] = useState(false);
   const [editHour, setEditHour] = useState("");
+  const appearance = useAppearance();
   const range = useMemo(() => rangeFor(preset, customFrom, customTo), [customFrom, customTo, preset]);
   const insights = useQuery(api.core.insights, range);
   const applyWeeklyInsight = useMutation(api.core.applyWeeklyInsight);
@@ -193,21 +194,13 @@ export default function ProgressScreen() {
               <Text style={styles.meta}>{moneyText(item.amount)}</Text>
             </View>
             <View style={styles.barTrack}>
-              <View style={[styles.barFill, { width: `${Math.max(8, Math.round((item.amount / maxCategory) * 100))}%` as `${number}%` }]} />
+              <View style={[styles.barFill, { backgroundColor: appearance.primary, width: `${Math.max(8, Math.round((item.amount / maxCategory) * 100))}%` as `${number}%` }]} />
             </View>
           </View>
         ))}
         {insights?.categorySummary.length === 0 ? <Text style={styles.emptyText}>No confirmed expenses in this range.</Text> : null}
       </Surface>
     </Screen>
-  );
-}
-
-function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -223,10 +216,6 @@ function Stat({ color, detail, label, value, wide = false }: { color: string; de
 
 const styles = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
-  chipTextSelected: { color: colors.surface },
   dateRow: { flexDirection: "row", gap: spacing.sm, position: "relative", zIndex: 20 },
   stats: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   stat: { borderRadius: radii.card, flexGrow: 1, minHeight: 112, padding: spacing.md, width: "47%" },

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { api } from "../convex/_generated/api";
-import { Mascot, PrimaryButton } from "../src/components/ui";
+import { Mascot, PrimaryButton, useAppearance } from "../src/components/ui";
 import { enqueueOffline } from "../src/offlineQueue";
 import { colors, radii, spacing } from "../src/theme";
 
@@ -24,6 +24,7 @@ export default function ReflectionScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
+  const appearance = useAppearance();
 
   function toggle(label: string) {
     setSelected((items) => items.includes(label) ? items.filter((item) => item !== label) : [...items, label]);
@@ -73,11 +74,11 @@ export default function ReflectionScreen() {
                 accessibilityState={{ checked: isSelected }}
                 key={label}
                 onPress={() => toggle(label)}
-                style={[styles.option, { backgroundColor: background }, isSelected && styles.optionSelected]}
+                style={[styles.option, { backgroundColor: background }, isSelected && { borderColor: appearance.primary }]}
               >
-                <Ionicons color={colors.primaryDark} name={icon} size={21} />
+                <Ionicons color={appearance.primaryDark} name={icon} size={21} />
                 <Text style={styles.optionLabel}>{label}</Text>
-                {isSelected ? <Ionicons color={colors.primaryDark} name="checkmark-circle" size={22} /> : null}
+                {isSelected ? <Ionicons color={appearance.primaryDark} name="checkmark-circle" size={22} /> : null}
               </Pressable>
             );
           })}

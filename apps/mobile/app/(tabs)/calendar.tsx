@@ -6,7 +6,7 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { api } from "../../convex/_generated/api";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
-import { Mascot, PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
+import { Mascot, PrimaryButton, SectionLabel, Surface, useAppearance } from "../../src/components/ui";
 import { colors, spacing } from "../../src/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -36,6 +36,7 @@ function weekStartFor(value: number) {
 }
 
 export default function CalendarScreen() {
+  const appearance = useAppearance();
   const [selectedDate, setSelectedDate] = useState(dateInput(Date.now()));
   const [dateModalOpen, setDateModalOpen] = useState(false);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
@@ -105,7 +106,7 @@ export default function CalendarScreen() {
                 accessibilityRole="button"
                 key={value}
                 onPress={() => setSelectedDate(value)}
-                style={[styles.day, selected && styles.daySelected]}
+                style={[styles.day, selected && { backgroundColor: appearance.primary }]}
               >
                 <Text style={[styles.dayName, selected && styles.dayTextSelected]}>
                   {day.toLocaleDateString([], { weekday: "short" }).slice(0, 1)}
@@ -133,7 +134,7 @@ export default function CalendarScreen() {
             }}
             style={styles.event}
           >
-            <View style={[styles.eventRail, { backgroundColor: colors.primary }]} />
+            <View style={[styles.eventRail, { backgroundColor: appearance.primary }]} />
             <View style={styles.eventCopy}>
               <Text style={styles.eventTitle}>{task.title}</Text>
               <Text style={styles.eventTime}>{new Date(task.scheduledAt ?? dayStart).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</Text>
@@ -174,8 +175,8 @@ export default function CalendarScreen() {
       </View>
 
       <Pressable accessibilityRole="button" onPress={() => setShowCreate((open) => !open)} style={styles.createToggle}>
-        <Ionicons color={colors.primaryDark} name={showCreate ? "remove" : "add"} size={21} />
-        <Text style={styles.createToggleText}>{showCreate ? "Close task form" : "Add task to this day"}</Text>
+        <Ionicons color={appearance.primaryDark} name={showCreate ? "remove" : "add"} size={21} />
+        <Text style={[styles.createToggleText, { color: appearance.primaryDark }]}>{showCreate ? "Close task form" : "Add task to this day"}</Text>
       </Pressable>
 
       {showCreate ? (
@@ -275,6 +276,7 @@ export default function CalendarScreen() {
 }
 
 function ClockTimePicker({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+  const appearance = useAppearance();
   const [open, setOpen] = useState(false);
   const [hourText = "09", minuteText = "00"] = value.split(":");
   const selectedHour = Number(hourText) || 0;
@@ -306,7 +308,7 @@ function ClockTimePicker({ onChange, value }: { onChange: (value: string) => voi
             <Text style={styles.timeLabel}>Hour</Text>
             <View style={styles.clockGrid}>
               {hours.map((hour) => (
-                <Pressable accessibilityRole="button" key={hour} onPress={() => setTime(hour, selectedMinute)} style={[styles.clockOption, selectedHour === hour && styles.clockSelected]}>
+                <Pressable accessibilityRole="button" key={hour} onPress={() => setTime(hour, selectedMinute)} style={[styles.clockOption, selectedHour === hour && [styles.clockSelected, { backgroundColor: appearance.primary, borderColor: appearance.primary }]]}>
                   <Text style={[styles.clockText, selectedHour === hour && styles.clockTextSelected]}>{hour}</Text>
                 </Pressable>
               ))}
@@ -314,7 +316,7 @@ function ClockTimePicker({ onChange, value }: { onChange: (value: string) => voi
             <Text style={styles.timeLabel}>Minute</Text>
             <View style={styles.minuteGrid}>
               {minutes.map((minute) => (
-                <Pressable accessibilityRole="button" key={minute} onPress={() => setTime(selectedHour, minute)} style={[styles.minuteOption, selectedMinute === minute && styles.clockSelected]}>
+                <Pressable accessibilityRole="button" key={minute} onPress={() => setTime(selectedHour, minute)} style={[styles.minuteOption, selectedMinute === minute && [styles.clockSelected, { backgroundColor: appearance.primary, borderColor: appearance.primary }]]}>
                   <Text style={[styles.clockText, selectedMinute === minute && styles.clockTextSelected]}>{`${minute}`.padStart(2, "0")}</Text>
                 </Pressable>
               ))}
