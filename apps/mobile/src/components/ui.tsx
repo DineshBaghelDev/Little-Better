@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { PropsWithChildren, ReactNode } from "react";
 import {
+  Image,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -10,6 +11,20 @@ import {
 } from "react-native";
 
 import { colors, radii, spacing, typography } from "../theme";
+
+const mascotSheet = require("../../assets/sprout-spritesheet.png");
+const spritePositions = {
+  calm: [0, 0],
+  complete: [2, 0],
+  focus: [1, 1],
+  pointing: [0, 1],
+  proud: [2, 0],
+  relaxed: [1, 1],
+  reflection: [1, 1],
+  watering: [0, 1],
+  working: [2, 1],
+} as const;
+const spriteFrameSize = 512;
 
 export function Surface({
   children,
@@ -90,39 +105,27 @@ export function Mascot({
   variant = "calm",
 }: {
   size?: number;
-  variant?: "calm" | "complete" | "focus" | "pointing" | "reflection";
+  variant?: keyof typeof spritePositions;
 }) {
-  const eyesClosed = variant === "focus" || variant === "complete";
-  const pointing = variant === "pointing";
+  const [column, row] = spritePositions[variant];
+  const scale = size / spriteFrameSize;
   return (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no"
       style={[styles.mascot, { height: size, width: size }]}
     >
-      <View style={[styles.leaf, styles.leafLeft, { height: size * 0.2, width: size * 0.13 }]} />
-      <View style={[styles.leaf, styles.leafRight, { height: size * 0.2, width: size * 0.13 }]} />
-      <View style={[styles.stem, { height: size * 0.16, width: Math.max(2, size * 0.035) }]} />
-      <View style={[styles.body, { borderRadius: size * 0.26, height: size * 0.64, width: size * 0.58 }]}>
-        <View style={[styles.arm, styles.armLeft, { height: size * 0.22, width: size * 0.11 }]} />
-        <View style={[styles.arm, pointing ? styles.armPointing : styles.armRight, { height: size * 0.22, width: size * 0.11 }]} />
-        <View style={styles.face}>
-          {eyesClosed ? (
-            <>
-              <View style={styles.closedEye} />
-              <View style={styles.closedEye} />
-            </>
-          ) : (
-            <>
-              <View style={styles.eye} />
-              <View style={styles.eye} />
-            </>
-          )}
-        </View>
-        <View style={[styles.mouth, variant === "reflection" && styles.softMouth]} />
-      </View>
-      <View style={[styles.foot, styles.footLeft, { height: size * 0.09, width: size * 0.16 }]} />
-      <View style={[styles.foot, styles.footRight, { height: size * 0.09, width: size * 0.16 }]} />
+      <Image
+        source={mascotSheet}
+        style={{
+          height: spriteFrameSize * 2 * scale,
+          transform: [
+            { translateX: -column * spriteFrameSize * scale },
+            { translateY: -row * spriteFrameSize * scale },
+          ],
+          width: spriteFrameSize * 3 * scale,
+        }}
+      />
     </View>
   );
 }
@@ -166,22 +169,5 @@ const styles = StyleSheet.create({
   rowTitle: { color: colors.text, fontSize: 15, fontWeight: "600" },
   rowDetail: { color: colors.muted, ...typography.secondary, marginTop: 3 },
   sectionLabel: { color: colors.text, ...typography.cardTitle },
-  mascot: { alignItems: "center", justifyContent: "flex-end" },
-  stem: { backgroundColor: colors.primaryDark, borderRadius: radii.pill, position: "absolute", top: "7%" },
-  leaf: { backgroundColor: colors.primary, borderRadius: radii.pill, position: "absolute", top: "0%" },
-  leafLeft: { transform: [{ rotate: "-36deg" }], left: "37%" },
-  leafRight: { transform: [{ rotate: "36deg" }], right: "37%" },
-  body: { alignItems: "center", backgroundColor: colors.primary, justifyContent: "center", marginBottom: "10%" },
-  arm: { backgroundColor: colors.primary, borderRadius: radii.pill, position: "absolute", top: "45%" },
-  armLeft: { left: "-12%", transform: [{ rotate: "18deg" }] },
-  armRight: { right: "-12%", transform: [{ rotate: "-18deg" }] },
-  armPointing: { right: "-18%", top: "32%", transform: [{ rotate: "-70deg" }] },
-  face: { flexDirection: "row", gap: 10, marginTop: 4 },
-  eye: { backgroundColor: colors.text, borderRadius: radii.pill, height: 5, width: 5 },
-  closedEye: { backgroundColor: colors.text, borderRadius: radii.pill, height: 2, marginTop: 2, width: 9 },
-  mouth: { borderBottomColor: colors.text, borderBottomWidth: 2, borderRadius: 12, height: 9, marginTop: 8, width: 18 },
-  softMouth: { width: 14 },
-  foot: { backgroundColor: colors.primaryDark, borderRadius: radii.pill, bottom: 0, position: "absolute" },
-  footLeft: { left: "31%" },
-  footRight: { right: "31%" },
+  mascot: { overflow: "hidden" },
 });
