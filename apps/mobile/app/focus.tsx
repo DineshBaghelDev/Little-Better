@@ -87,7 +87,7 @@ export default function FocusScreen() {
           </Text>
           <Text style={styles.timerMeta}>of 30:00</Text>
         </View>
-        <Mascot size={96} variant="focus" />
+        <Mascot size={128} variant="focus" />
       </View>
 
       <View style={styles.controls}>

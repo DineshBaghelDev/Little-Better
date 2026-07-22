@@ -149,7 +149,7 @@ export default function ProgressScreen() {
 
       {currentInsight && currentInsightStatus === "new" ? (
         <View style={styles.insight}>
-          <Mascot size={92} variant="proud" />
+          <Mascot size={124} variant="proud" />
           <Text style={styles.insightTitle}>{currentInsight.observation}</Text>
           <Text style={styles.insightBody}>{currentInsight.evidence}</Text>
           <Surface style={styles.suggestion}>
@@ -178,7 +178,7 @@ export default function ProgressScreen() {
         </View>
       ) : currentInsight && currentInsightStatus === "dismissed" ? (
         <Surface style={styles.emptyInsight}>
-          <Mascot size={72} variant="relaxed" />
+          <Mascot size={104} variant="relaxed" />
           <Text style={styles.suggestionTitle}>Insight dismissed</Text>
           <Pressable accessibilityRole="button" onPress={() => restoreDismissed(currentInsight._id)}>
             <Text style={styles.undo}>Undo</Text>
@@ -186,7 +186,7 @@ export default function ProgressScreen() {
         </Surface>
       ) : !currentInsight ? (
         <Surface style={styles.emptyInsight}>
-          <Mascot size={72} variant="working" />
+          <Mascot size={112} variant="working" />
           <Text style={styles.suggestionTitle}>Not enough data yet</Text>
           <Text style={styles.meta}>{insights?.insightRequirement ?? "Record 5 focus sessions for a weekly insight."}</Text>
         </Surface>
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", gap: spacing.sm },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 15, minHeight: 48, paddingHorizontal: spacing.md },
   applied: { alignItems: "center", flexDirection: "row", gap: spacing.md, padding: spacing.md },
-  emptyInsight: { gap: spacing.sm, padding: spacing.md },
+  emptyInsight: { alignItems: "center", gap: spacing.sm, padding: spacing.lg },
   undo: { color: colors.primaryDark, fontSize: 14, fontWeight: "700", minHeight: 44, paddingTop: 12 },
   list: { gap: spacing.md, padding: spacing.md },
   row: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },

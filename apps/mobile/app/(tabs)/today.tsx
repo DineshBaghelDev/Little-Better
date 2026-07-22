@@ -266,11 +266,9 @@ export default function TodayTabScreen() {
 
       {!today?.rankedItems.length && !today?.laterToday.length ? (
         <Surface style={styles.empty}>
-          <Mascot size={72} variant="complete" />
-          <View style={styles.grow}>
-            <Text style={styles.cardTitle}>Nothing needs ranking</Text>
-            <Text style={styles.meta}>Add one planned task when you want Today to guide you.</Text>
-          </View>
+          <Mascot size={148} variant="celebrating" />
+          <Text style={styles.emptyTitle}>All clear for now</Text>
+          <Text style={styles.emptyMeta}>Nothing needs ranking. Add a planned task whenever you want Today to guide you.</Text>
           <View style={styles.emptyAction}>
             <PrimaryButton label="Add task" onPress={() => router.push("/quick-add")} />
           </View>
@@ -350,8 +348,10 @@ const styles = StyleSheet.create({
     width: 44,
   },
   undoToast: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", padding: spacing.md },
-  empty: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.md, padding: spacing.md },
-  emptyAction: { minWidth: 120 },
+  empty: { alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
+  emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "700", marginTop: spacing.sm },
+  emptyMeta: { color: colors.muted, fontSize: 13, lineHeight: 19, marginBottom: spacing.sm, textAlign: "center" },
+  emptyAction: { minWidth: 160 },
   laterRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 72, padding: spacing.md },
   laterDetails: { borderTopColor: colors.border, borderTopWidth: 1, padding: spacing.md },
   laterTask: { color: colors.muted, fontSize: 14, paddingVertical: spacing.sm },
