@@ -37,6 +37,8 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.littlebetter.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#FAF8F2",
         "foregroundImage": "./assets/android-icon-foreground.png",
