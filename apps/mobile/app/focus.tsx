@@ -24,6 +24,7 @@ export default function FocusScreen() {
   const addManualFocus = useMutation(api.core.addManualFocus);
   const [localTimer, setLocalTimer] = useState<LocalTimer | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [pendingPaused, setPendingPaused] = useState<boolean | null>(null);
   const appearance = useAppearance();
 
   useEffect(() => {
@@ -55,9 +56,13 @@ export default function FocusScreen() {
     : 0;
   const remaining = Math.max(0, SESSION_SECONDS - elapsed);
   const completedSegments = Math.min(ringSegments.length, Math.floor((elapsed / SESSION_SECONDS) * ringSegments.length));
-  const paused = timer?.status === "paused";
+  const paused = pendingPaused ?? timer?.status === "paused";
   const minutes = Math.floor(remaining / 60).toString().padStart(2, "0");
   const seconds = (remaining % 60).toString().padStart(2, "0");
+
+  useEffect(() => {
+    if (pendingPaused !== null && timer?.status === (pendingPaused ? "paused" : "running")) setPendingPaused(null);
+  }, [pendingPaused, timer?.status]);
 
   return (
     <SafeAreaView edges={["top", "bottom", "left", "right"]} style={[styles.safeArea, compact && styles.safeAreaCompact]}>
@@ -101,7 +106,15 @@ export default function FocusScreen() {
             accessibilityRole="button"
             onPress={async () => {
               if (!timer) return;
-              if ("_id" in timer) await setPaused({ paused: !paused, timerId: timer._id });
+              if ("_id" in timer) {
+                const nextPaused = !paused;
+                setPendingPaused(nextPaused);
+                try {
+                  await setPaused({ paused: nextPaused, timerId: timer._id });
+                } catch {
+                  setPendingPaused(null);
+                }
+              }
               else {
                 const next = {
                   ...timer,
