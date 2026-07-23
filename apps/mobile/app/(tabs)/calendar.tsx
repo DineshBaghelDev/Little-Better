@@ -2,11 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "../../convex/_generated/api";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
-import { PrimaryButton, SectionLabel, Surface } from "../../src/components/ui";
+import { Mascot, PrimaryButton, SectionLabel, Surface, useAppearance } from "../../src/components/ui";
 import { colors, spacing } from "../../src/theme";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -23,6 +24,11 @@ function parseDate(value: string) {
   return year && month && day ? new Date(year, month - 1, day).getTime() : Date.now();
 }
 
+function timeString(ms: number) {
+  const date = new Date(ms);
+  return `${`${date.getHours()}`.padStart(2, "0")}:${`${date.getMinutes()}`.padStart(2, "0")}`;
+}
+
 function weekStartFor(value: number) {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);
@@ -31,8 +37,8 @@ function weekStartFor(value: number) {
 }
 
 export default function CalendarScreen() {
+  const appearance = useAppearance();
   const [selectedDate, setSelectedDate] = useState(dateInput(Date.now()));
-  const [dateModalOpen, setDateModalOpen] = useState(false);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [schedulingTask, setSchedulingTask] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -47,6 +53,7 @@ export default function CalendarScreen() {
   const addTask = useMutation(api.core.addTask);
   const completeTask = useMutation(api.core.completeTask);
   const scheduleTask = useMutation(api.core.scheduleTask);
+  const removeTask = useMutation(api.core.removeTask);
   const [taskForm, setTaskForm] = useState({
     location: "",
     meetingLink: "",
@@ -79,9 +86,7 @@ export default function CalendarScreen() {
   return (
     <Screen
       headerAction={
-        <Pressable accessibilityLabel="Choose calendar date" accessibilityRole="button" onPress={() => setDateModalOpen(true)} style={styles.headerIcon}>
-          <Ionicons color={colors.text} name="calendar-outline" size={24} />
-        </Pressable>
+        <DatePickerField iconOnly label="Choose calendar date" onChange={setSelectedDate} value={selectedDate} />
       }
       subtitle="Selected day"
       title="Calendar"
@@ -100,12 +105,14 @@ export default function CalendarScreen() {
                 accessibilityRole="button"
                 key={value}
                 onPress={() => setSelectedDate(value)}
-                style={[styles.day, selected && styles.daySelected]}
+                style={styles.dayCell}
               >
-                <Text style={[styles.dayName, selected && styles.dayTextSelected]}>
-                  {day.toLocaleDateString([], { weekday: "short" }).slice(0, 1)}
-                </Text>
-                <Text style={[styles.date, selected && styles.dayTextSelected]}>{day.getDate()}</Text>
+                <View style={[styles.dayPill, selected && { backgroundColor: appearance.primary }]}>
+                  <Text style={[styles.dayName, selected && styles.dayTextSelected]}>
+                    {day.toLocaleDateString([], { weekday: "short" }).slice(0, 1)}
+                  </Text>
+                  <Text style={[styles.date, selected && styles.dayTextSelected]}>{day.getDate()}</Text>
+                </View>
               </Pressable>
             );
           })}
@@ -119,8 +126,16 @@ export default function CalendarScreen() {
       <View style={styles.events}>
         {scheduled.map((task) => (
           <Surface key={task._id}>
-          <Pressable accessibilityRole="button" onPress={() => setExpandedTask(expandedTask === task._id ? null : task._id)} style={styles.event}>
-            <View style={[styles.eventRail, { backgroundColor: colors.primary }]} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              const opening = expandedTask !== task._id;
+              if (opening && task.scheduledAt) setTaskForm((current) => ({ ...current, time: timeString(task.scheduledAt ?? dayStart) }));
+              setExpandedTask(opening ? task._id : null);
+            }}
+            style={styles.event}
+          >
+            <View style={[styles.eventRail, { backgroundColor: appearance.primary }]} />
             <View style={styles.eventCopy}>
               <Text style={styles.eventTitle}>{task.title}</Text>
               <Text style={styles.eventTime}>{new Date(task.scheduledAt ?? dayStart).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</Text>
@@ -136,6 +151,10 @@ export default function CalendarScreen() {
                 <View style={styles.grow}><PrimaryButton label="Complete" onPress={() => completeTask({ taskId: task._id })} /></View>
                 <View style={styles.grow}><PrimaryButton label="Move" onPress={() => scheduleTask({ scheduledAt: timeOnDay(dayStart, taskForm.time), taskId: task._id })} secondary /></View>
               </View>
+              <Pressable accessibilityLabel={`Delete ${task.title}`} accessibilityRole="button" onPress={() => { setExpandedTask(null); removeTask({ taskId: task._id }); }} style={styles.deleteRow}>
+                <Ionicons color={colors.coral} name="trash-outline" size={18} />
+                <Text style={styles.deleteText}>Delete task</Text>
+              </Pressable>
             </View>
           ) : null}
           </Surface>
@@ -153,6 +172,7 @@ export default function CalendarScreen() {
         ))}
         {!scheduled.length && !sessions.length ? (
           <Surface style={styles.empty}>
+            <Mascot size={136} variant="planning" />
             <Text style={styles.eventTitle}>Nothing planned yet</Text>
             <Text style={styles.eventTime}>Add one task or schedule an unscheduled item.</Text>
           </Surface>
@@ -160,8 +180,8 @@ export default function CalendarScreen() {
       </View>
 
       <Pressable accessibilityRole="button" onPress={() => setShowCreate((open) => !open)} style={styles.createToggle}>
-        <Ionicons color={colors.primaryDark} name={showCreate ? "remove" : "add"} size={21} />
-        <Text style={styles.createToggleText}>{showCreate ? "Close task form" : "Add task to this day"}</Text>
+        <Ionicons color={appearance.primaryDark} name={showCreate ? "remove" : "add"} size={21} />
+        <Text style={[styles.createToggleText, { color: appearance.primaryDark }]}>{showCreate ? "Close task form" : "Add task to this day"}</Text>
       </Pressable>
 
       {showCreate ? (
@@ -208,18 +228,25 @@ export default function CalendarScreen() {
       <Surface>
         {(calendar?.unscheduledTasks ?? []).map((task) => (
           <View key={task._id}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setSchedulingTask(schedulingTask === task._id ? null : task._id)}
-              style={styles.unscheduled}
-            >
-              <View style={styles.eventCopy}>
-                <Text style={styles.eventTitle}>{task.title}</Text>
-                <Text style={styles.eventTime}>Choose a time to schedule</Text>
-                {task.note ? <Text style={styles.eventTime}>{task.note}</Text> : null}
-              </View>
-              <Ionicons color={colors.primaryDark} name="calendar-outline" size={21} />
-            </Pressable>
+            <View style={styles.unscheduled}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setSchedulingTask(schedulingTask === task._id ? null : task._id)}
+                style={styles.grow}
+              >
+                <View style={styles.eventCopy}>
+                  <Text style={styles.eventTitle}>{task.title}</Text>
+                  <Text style={styles.eventTime}>Choose a time to schedule</Text>
+                  {task.note ? <Text style={styles.eventTime}>{task.note}</Text> : null}
+                </View>
+              </Pressable>
+              <Pressable accessibilityLabel={`Schedule ${task.title}`} accessibilityRole="button" onPress={() => setSchedulingTask(schedulingTask === task._id ? null : task._id)} style={styles.rowIcon}>
+                <Ionicons color={appearance.primaryDark} name="calendar-outline" size={21} />
+              </Pressable>
+              <Pressable accessibilityLabel={`Delete ${task.title}`} accessibilityRole="button" onPress={() => removeTask({ taskId: task._id })} style={styles.rowIcon}>
+                <Ionicons color={colors.coral} name="trash-outline" size={20} />
+              </Pressable>
+            </View>
             {schedulingTask === task._id ? (
               <View style={styles.taskActions}>
                 <ClockTimePicker value={taskForm.time} onChange={(time) => setTaskForm((current) => ({ ...current, time }))} />
@@ -234,33 +261,12 @@ export default function CalendarScreen() {
         {calendar?.unscheduledTasks.length === 0 ? <Text style={styles.emptyText}>No unscheduled tasks.</Text> : null}
       </Surface>
 
-      <Modal animationType="fade" transparent visible={dateModalOpen} onRequestClose={() => setDateModalOpen(false)}>
-        <View style={styles.timeBackdrop}>
-          <View style={styles.dateSheet}>
-            <View style={styles.timeHeader}>
-              <Text style={styles.timeTitle}>Choose date</Text>
-              <Pressable accessibilityLabel="Close date picker" accessibilityRole="button" onPress={() => setDateModalOpen(false)} style={styles.closeButton}>
-                <Ionicons color={colors.text} name="close" size={20} />
-              </Pressable>
-            </View>
-            <DatePickerField
-              defaultOpen
-              key={selectedDate}
-              label="Calendar date"
-              onChange={(date) => {
-                setSelectedDate(date);
-                setDateModalOpen(false);
-              }}
-              value={selectedDate}
-            />
-          </View>
-        </View>
-      </Modal>
     </Screen>
   );
 }
 
 function ClockTimePicker({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+  const appearance = useAppearance();
   const [open, setOpen] = useState(false);
   const [hourText = "09", minuteText = "00"] = value.split(":");
   const selectedHour = Number(hourText) || 0;
@@ -280,7 +286,7 @@ function ClockTimePicker({ onChange, value }: { onChange: (value: string) => voi
         </View>
       </Pressable>
       <Modal animationType="fade" transparent visible={open} onRequestClose={() => setOpen(false)}>
-        <View style={styles.timeBackdrop}>
+        <SafeAreaView style={styles.timeBackdrop}>
           <View style={styles.timeSheet}>
             <View style={styles.timeHeader}>
               <Text style={styles.timeTitle}>Pick time</Text>
@@ -292,7 +298,7 @@ function ClockTimePicker({ onChange, value }: { onChange: (value: string) => voi
             <Text style={styles.timeLabel}>Hour</Text>
             <View style={styles.clockGrid}>
               {hours.map((hour) => (
-                <Pressable accessibilityRole="button" key={hour} onPress={() => setTime(hour, selectedMinute)} style={[styles.clockOption, selectedHour === hour && styles.clockSelected]}>
+                <Pressable accessibilityRole="button" key={hour} onPress={() => setTime(hour, selectedMinute)} style={[styles.clockOption, selectedHour === hour && [styles.clockSelected, { backgroundColor: appearance.primary, borderColor: appearance.primary }]]}>
                   <Text style={[styles.clockText, selectedHour === hour && styles.clockTextSelected]}>{hour}</Text>
                 </Pressable>
               ))}
@@ -300,14 +306,14 @@ function ClockTimePicker({ onChange, value }: { onChange: (value: string) => voi
             <Text style={styles.timeLabel}>Minute</Text>
             <View style={styles.minuteGrid}>
               {minutes.map((minute) => (
-                <Pressable accessibilityRole="button" key={minute} onPress={() => setTime(selectedHour, minute)} style={[styles.minuteOption, selectedMinute === minute && styles.clockSelected]}>
+                <Pressable accessibilityRole="button" key={minute} onPress={() => setTime(selectedHour, minute)} style={[styles.minuteOption, selectedMinute === minute && [styles.clockSelected, { backgroundColor: appearance.primary, borderColor: appearance.primary }]]}>
                   <Text style={[styles.clockText, selectedMinute === minute && styles.clockTextSelected]}>{`${minute}`.padStart(2, "0")}</Text>
                 </Pressable>
               ))}
             </View>
             <PrimaryButton label="Done" onPress={() => setOpen(false)} />
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );
@@ -316,9 +322,9 @@ function ClockTimePicker({ onChange, value }: { onChange: (value: string) => voi
 const styles = StyleSheet.create({
   headerIcon: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
   weekNav: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
-  week: { flexDirection: "row", justifyContent: "space-between" },
-  day: { alignItems: "center", borderRadius: 22, gap: 6, minHeight: 64, paddingHorizontal: 10, paddingVertical: 8 },
-  daySelected: { backgroundColor: colors.primary },
+  week: { flex: 1, flexDirection: "row" },
+  dayCell: { alignItems: "center", flex: 1 },
+  dayPill: { alignItems: "center", borderRadius: 22, gap: 6, justifyContent: "center", minHeight: 64, width: 42 },
   dayName: { color: colors.muted, fontSize: 11, fontWeight: "600" },
   date: { color: colors.text, fontSize: 14, fontWeight: "700" },
   dayTextSelected: { color: colors.surface },
@@ -328,7 +334,7 @@ const styles = StyleSheet.create({
   eventCopy: { flex: 1, padding: spacing.md },
   eventTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
   eventTime: { color: colors.muted, fontSize: 12, marginTop: spacing.xs },
-  empty: { padding: spacing.md },
+  empty: { alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
   taskActions: { gap: spacing.sm, padding: spacing.md },
   actionRow: { flexDirection: "row", gap: spacing.sm },
   grow: { flex: 1 },
@@ -336,7 +342,10 @@ const styles = StyleSheet.create({
   createToggleText: { color: colors.primaryDark, fontSize: 14, fontWeight: "700" },
   quickAdd: { gap: spacing.sm, padding: spacing.md },
   input: { borderColor: colors.border, borderRadius: 14, borderWidth: 1, color: colors.text, fontSize: 15, minHeight: 48, paddingHorizontal: spacing.md },
-  unscheduled: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 68 },
+  unscheduled: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 68, paddingRight: spacing.sm },
+  rowIcon: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
+  deleteRow: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center", minHeight: 44 },
+  deleteText: { color: colors.coral, fontSize: 14, fontWeight: "700" },
   emptyText: { color: colors.muted, fontSize: 14, padding: spacing.md },
   timeTrigger: {
     alignItems: "center",
@@ -351,7 +360,6 @@ const styles = StyleSheet.create({
   timeValue: { color: colors.text, fontSize: 15, fontWeight: "700" },
   timeBackdrop: { alignItems: "center", backgroundColor: "rgba(47,58,51,0.42)", flex: 1, justifyContent: "center", padding: spacing.lg },
   timeSheet: { backgroundColor: colors.surface, borderRadius: 22, gap: spacing.sm, maxWidth: 380, padding: spacing.lg, width: "100%" },
-  dateSheet: { backgroundColor: colors.background, borderRadius: 22, gap: spacing.md, maxWidth: 380, overflow: "visible", padding: spacing.lg, width: "100%" },
   timeHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   timeTitle: { color: colors.text, fontSize: 18, fontWeight: "700" },
   closeButton: { alignItems: "center", height: 40, justifyContent: "center", width: 40 },

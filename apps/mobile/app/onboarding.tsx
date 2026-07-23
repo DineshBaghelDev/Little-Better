@@ -3,17 +3,20 @@ import { useMutation } from "convex/react";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "../convex/_generated/api";
-import { Mascot, PrimaryButton, Surface } from "../src/components/ui";
+import { HourField } from "../src/components/HourField";
+import { Chip, Mascot, PrimaryButton, Surface } from "../src/components/ui";
 import { colors, radii, spacing } from "../src/theme";
 
 type TargetType = "sessions_per_week" | "minutes_per_day" | "minutes_per_week" | "binary_days";
@@ -36,14 +39,6 @@ export default function OnboardingScreen() {
     targetType: "sessions_per_week" as TargetType,
     targetValue: "3",
   });
-  const setupRows = [
-    { icon: "heart-outline", label: "Focus area", value: values.focusName || "Study" },
-    { icon: "flag-outline", label: "Target", value: `${values.targetValue || "3"} ${targetOptions.find(([type]) => type === values.targetType)?.[1] ?? "sessions"}` },
-    { icon: "alarm-outline", label: "Preferred focus time", value: `${values.preferredHour || "9"}:00` },
-    { icon: "moon-outline", label: "Reflection time", value: `${values.reflectionHour || "20"}:00` },
-    { icon: "wallet-outline", label: "Monthly budget", value: values.monthlyBudget || "0" },
-    { icon: "notifications-outline", label: "Reminders", value: values.notificationsEnabled ? "On" : "Skipped" },
-  ] as const;
 
   async function startPlan() {
     await bootstrap({
@@ -60,7 +55,8 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.grow}>
+      <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.brandRow}>
           <Ionicons color={colors.primary} name="leaf" size={22} />
           <Text style={styles.brand}>Little Better</Text>
@@ -69,83 +65,86 @@ export default function OnboardingScreen() {
         <Text style={styles.promise}>One focus. One weekly improvement.</Text>
 
         <View style={styles.mascotWrap}>
-          <Mascot size={156} />
+          <Mascot size={184} variant="watering" />
         </View>
 
         <View>
           <Text style={styles.title}>Set up your plan</Text>
-          <Text style={styles.helper}>A few defaults make Today useful.</Text>
+          <Text style={styles.helper}>A few defaults make Today useful. You can change all of this later.</Text>
         </View>
 
-        <Surface>
-          {setupRows.map((row, index) => (
-            <Pressable
-              accessibilityRole="button"
-              key={row.label}
-              style={[styles.setupRow, index === 0 && styles.setupRowSelected]}
-            >
-              <Ionicons color={colors.primaryDark} name={row.icon} size={20} />
-              <Text style={styles.setupLabel}>{row.label}</Text>
-              <Text style={styles.setupValue}>{row.value}</Text>
-            </Pressable>
-          ))}
-        </Surface>
-
         <Surface style={styles.form}>
-          <TextInput
-            accessibilityLabel="Tracked focus category"
-            onChangeText={(focusName) => setValues((current) => ({ ...current, focusName }))}
-            placeholder="Focus area"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            value={values.focusName}
-          />
-          <TextInput
-            accessibilityLabel="Weekly session target"
-            keyboardType="number-pad"
-            onChangeText={(targetValue) => setValues((current) => ({ ...current, targetValue }))}
-            placeholder="Target value"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            value={values.targetValue}
-          />
-          <View style={styles.chips}>
-            {targetOptions.map(([type, label]) => (
-              <Chip
-                key={type}
-                label={label}
-                selected={values.targetType === type}
-                onPress={() => setValues((current) => ({ ...current, targetType: type }))}
-              />
-            ))}
+          <View style={styles.field}>
+            <Text style={styles.label}>What do you want to focus on?</Text>
+            <TextInput
+              accessibilityLabel="Tracked focus category"
+              onChangeText={(focusName) => setValues((current) => ({ ...current, focusName }))}
+              placeholder="e.g. Study, Gym, Reading"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+              value={values.focusName}
+            />
           </View>
-          <TextInput
-            accessibilityLabel="Preferred focus hour"
-            keyboardType="number-pad"
-            onChangeText={(preferredHour) => setValues((current) => ({ ...current, preferredHour }))}
-            placeholder="Focus hour, 0 to 23"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            value={values.preferredHour}
+
+          <View style={styles.field}>
+            <Text style={styles.label}>How do you want to measure it?</Text>
+            <View style={styles.chips}>
+              {targetOptions.map(([type, label]) => (
+                <Chip
+                  key={type}
+                  label={label}
+                  selected={values.targetType === type}
+                  onPress={() => setValues((current) => ({ ...current, targetType: type }))}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Weekly goal</Text>
+            <View style={styles.amountRow}>
+              <TextInput
+                accessibilityLabel="Weekly session target"
+                keyboardType="number-pad"
+                onChangeText={(targetValue) => setValues((current) => ({ ...current, targetValue }))}
+                placeholder="3"
+                placeholderTextColor={colors.muted}
+                style={styles.amountInput}
+                value={values.targetValue}
+              />
+              <Text style={styles.amountSuffix}>{targetOptions.find(([type]) => type === values.targetType)?.[1] ?? ""}</Text>
+            </View>
+          </View>
+
+          <HourField
+            label="Preferred focus time"
+            onChange={(hour) => setValues((current) => ({ ...current, preferredHour: String(hour) }))}
+            value={Number(values.preferredHour) || 9}
           />
-          <TextInput
-            accessibilityLabel="Evening reflection hour"
-            keyboardType="number-pad"
-            onChangeText={(reflectionHour) => setValues((current) => ({ ...current, reflectionHour }))}
-            placeholder="Reflection hour, 17 to 23"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            value={values.reflectionHour}
+          <HourField
+            label="Reflection time"
+            maxHour={23}
+            minHour={17}
+            onChange={(hour) => setValues((current) => ({ ...current, reflectionHour: String(hour) }))}
+            value={Number(values.reflectionHour) || 20}
           />
-          <TextInput
-            accessibilityLabel="Monthly budget"
-            keyboardType="number-pad"
-            onChangeText={(monthlyBudget) => setValues((current) => ({ ...current, monthlyBudget }))}
-            placeholder="Monthly budget"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            value={values.monthlyBudget}
-          />
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Monthly budget</Text>
+            <View style={styles.amountRow}>
+              <Text style={styles.amountPrefix}>{"\u20b9"}</Text>
+              <TextInput
+                accessibilityLabel="Monthly budget"
+                keyboardType="number-pad"
+                onChangeText={(monthlyBudget) => setValues((current) => ({ ...current, monthlyBudget }))}
+                placeholder="25000"
+                placeholderTextColor={colors.muted}
+                style={styles.amountInput}
+                value={values.monthlyBudget}
+              />
+            </View>
+          </View>
+
           <Pressable
             accessibilityRole="switch"
             accessibilityState={{ checked: values.notificationsEnabled }}
@@ -163,21 +162,15 @@ export default function OnboardingScreen() {
         <PrimaryButton label="Start my plan" onPress={startPlan} />
         <Text style={styles.footnote}>You can change this anytime.</Text>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  content: { padding: spacing.lg, paddingBottom: spacing.xl },
+  grow: { flex: 1 },
+  content: { alignSelf: "center", maxWidth: 720, padding: spacing.lg, paddingBottom: spacing.xl, width: "100%" },
   brandRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   brand: { color: colors.text, fontSize: 24, fontWeight: "800" },
   tagline: { color: colors.primaryDark, fontSize: 18, fontWeight: "700", marginTop: spacing.lg },
@@ -185,24 +178,13 @@ const styles = StyleSheet.create({
   mascotWrap: { alignItems: "center", marginVertical: spacing.lg },
   title: { color: colors.text, fontSize: 24, fontWeight: "700" },
   helper: { color: colors.muted, fontSize: 14, marginBottom: spacing.md, marginTop: spacing.xs },
-  setupRow: {
-    alignItems: "center",
-    borderBottomColor: colors.border,
-    borderBottomWidth: 1,
-    flexDirection: "row",
-    minHeight: 56,
-    paddingHorizontal: spacing.md,
-  },
-  setupRowSelected: { backgroundColor: colors.sageSurface },
   setupLabel: { color: colors.text, flex: 1, fontSize: 14, marginLeft: spacing.sm },
-  setupValue: { color: colors.muted, fontSize: 13 },
-  form: { gap: spacing.sm, marginTop: spacing.md, padding: spacing.md },
+  form: { gap: spacing.md, marginTop: spacing.md, padding: spacing.md },
+  field: { gap: spacing.xs },
+  label: { color: colors.text, fontSize: 14, fontWeight: "700" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
-  chipTextSelected: { color: colors.surface },
   input: {
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radii.control,
     borderWidth: 1,
@@ -211,6 +193,10 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: spacing.md,
   },
+  amountRow: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", minHeight: 48, paddingHorizontal: spacing.md },
+  amountPrefix: { color: colors.muted, fontSize: 15, fontWeight: "700", marginRight: spacing.xs },
+  amountSuffix: { color: colors.muted, fontSize: 13, fontWeight: "600", marginLeft: spacing.xs },
+  amountInput: { color: colors.text, flex: 1, fontSize: 15 },
   toggleRow: { alignItems: "center", borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, flexDirection: "row", minHeight: 56, paddingHorizontal: spacing.md },
   toggleCopy: { flex: 1 },
   helperText: { color: colors.muted, fontSize: 12, marginTop: 2 },

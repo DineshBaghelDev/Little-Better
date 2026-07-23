@@ -1,14 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "../../convex/_generated/api";
 import { Doc, Id } from "../../convex/_generated/dataModel";
 import { CategoryDropdown } from "../../src/components/CategoryDropdown";
 import { DatePickerField, dateInput } from "../../src/components/DatePickerField";
 import { Screen } from "../../src/components/Screen";
-import { SectionLabel, Surface } from "../../src/components/ui";
+import { Chip, Mascot, SectionLabel, Surface, useAppearance } from "../../src/components/ui";
 import { colors, radii, spacing } from "../../src/theme";
 
 type TransactionType = "expense" | "income";
@@ -20,7 +21,7 @@ const statusOptions = [
 ] satisfies { label: string; value: "pending" | "confirmed" }[];
 
 function moneyText(value: number) {
-  return `Rs ${value.toLocaleString("en-IN")}`;
+  return `\u20b9${value.toLocaleString("en-IN")}`;
 }
 
 function parseDate(value: string) {
@@ -33,6 +34,7 @@ export default function MoneyScreen() {
   const updateTransaction = useMutation(api.core.updateTransaction);
   const removeTransaction = useMutation(api.core.removeTransaction);
   const money = useQuery(api.core.money, {});
+  const appearance = useAppearance();
   const [deeperOpen, setDeeperOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Id<"transactions"> | null>(null);
   const [expense, setExpense] = useState({
@@ -132,7 +134,7 @@ export default function MoneyScreen() {
 
   return (
     <Screen
-      headerAction={<Ionicons color={colors.text} name="wallet-outline" size={24} />}
+      headerAction={<Mascot size={52} variant="money" />}
       subtitle="Budget, pending confirmations, and recent spend"
       title="Money"
     >
@@ -145,7 +147,7 @@ export default function MoneyScreen() {
           {moneyText(spent)} confirmed of {moneyText(budget)} this month
         </Text>
         <View style={styles.track}>
-          <View style={[styles.progress, overBudget && styles.progressOver, { width: `${progress}%` as `${number}%` }]} />
+          <View style={[styles.progress, { backgroundColor: appearance.primary }, overBudget && styles.progressOver, { width: `${progress}%` as `${number}%` }]} />
         </View>
       </View>
 
@@ -178,7 +180,12 @@ export default function MoneyScreen() {
             onRemove={() => removeTransaction({ transactionId: transaction._id })}
           />
         ))}
-        {money?.confirmed.length === 0 ? <Text style={styles.emptyText}>No confirmed transactions yet.</Text> : null}
+        {money?.confirmed.length === 0 ? (
+          <View style={styles.emptyMascot}>
+            <Mascot size={124} variant="watering" />
+            <Text style={styles.emptyText}>No confirmed transactions yet.</Text>
+          </View>
+        ) : null}
       </Surface>
 
       <Surface>
@@ -215,22 +222,22 @@ export default function MoneyScreen() {
       </Surface>
 
       <Modal animationType="slide" transparent visible={editingTransaction !== null} onRequestClose={resetTransaction}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalBackdrop}>
+          <SafeAreaView edges={["bottom"]} style={styles.modalSheet}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit transaction</Text>
               <Pressable accessibilityLabel="Close edit transaction" accessibilityRole="button" onPress={resetTransaction} style={styles.iconButton}>
                 <Ionicons color={colors.text} name="close" size={20} />
               </Pressable>
             </View>
-            <ScrollView contentContainerStyle={styles.modalContent} nestedScrollEnabled>
+            <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
               {transactionFields()}
-              <Pressable accessibilityRole="button" onPress={saveTransaction} style={styles.addButton}>
+              <Pressable accessibilityRole="button" onPress={saveTransaction} style={[styles.addButton, { backgroundColor: appearance.primary }]}>
                 <Text style={styles.addButtonText}>Save changes</Text>
               </Pressable>
             </ScrollView>
-          </View>
-        </View>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );
@@ -252,45 +259,80 @@ function TransactionRow({
   transaction: Doc<"transactions">;
 }) {
   const type = transaction.type ?? "expense";
-  return (
-    <View style={[styles.transaction, pending && styles.pending]}>
+  const compact = useWindowDimensions().width < 360;
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  function run(action: () => void) {
+    setMenuOpen(false);
+    action();
+  }
+
+  const details = (
+    <>
       <View style={styles.transactionIcon}>
         <Ionicons color={pending ? colors.coral : colors.primaryDark} name={type === "income" ? "arrow-down" : "receipt-outline"} size={20} />
       </View>
       <View style={styles.grow}>
-        <Text style={styles.transactionTitle}>{transaction.merchant || transaction.category}</Text>
+        <View style={styles.transactionHeading}>
+          <Text numberOfLines={1} style={[styles.transactionTitle, styles.grow]}>{transaction.merchant || transaction.category}</Text>
+          <Text style={styles.transactionTitle}>{type === "income" ? "+" : "-"}{moneyText(transaction.amount)}</Text>
+        </View>
         <Text style={styles.meta}>
           {new Date(transaction.occurredAt).toLocaleDateString()} - {transaction.category} - {transaction.paymentMethod ?? "online"}
         </Text>
         {transaction.source ? <Text style={styles.meta}>{transaction.source}{transaction.resolution ? ` - ${transaction.resolution}` : ""}</Text> : null}
         {transaction.note ? <Text style={styles.meta}>{transaction.note}</Text> : null}
       </View>
-      <Text style={styles.transactionTitle}>{type === "income" ? "+" : "-"}{moneyText(transaction.amount)}</Text>
-      <Pressable accessibilityLabel={`Edit ${transaction.category} transaction`} accessibilityRole="button" onPress={onEdit} style={styles.iconButton}>
-        <Ionicons color={colors.primaryDark} name="create-outline" size={20} />
-      </Pressable>
+    </>
+  );
+  const actions = (
+    <>
       {pending && onConfirm ? (
         <Pressable accessibilityLabel={`Confirm ${transaction.category} transaction`} accessibilityRole="button" onPress={onConfirm} style={styles.confirm}>
           <Ionicons color={colors.surface} name="checkmark" size={20} />
         </Pressable>
       ) : null}
-      {pending && onIgnore ? (
-        <Pressable accessibilityLabel={`Ignore ${transaction.category} transaction`} accessibilityRole="button" onPress={onIgnore} style={styles.iconButton}>
-          <Ionicons color={colors.coral} name="close" size={20} />
-        </Pressable>
-      ) : null}
-      <Pressable accessibilityLabel={`Delete ${transaction.category} transaction`} accessibilityRole="button" onPress={onRemove} style={styles.iconButton}>
-        <Ionicons color={colors.coral} name="trash-outline" size={20} />
+      <Pressable accessibilityLabel={`More actions for ${transaction.category} transaction`} accessibilityRole="button" onPress={() => setMenuOpen(true)} style={styles.iconButton}>
+        <Ionicons color={colors.text} name="ellipsis-vertical" size={20} />
       </Pressable>
-    </View>
+    </>
   );
-}
 
-function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-    </Pressable>
+    <View style={[styles.transaction, pending && styles.pending, compact && styles.transactionCompact]}>
+      {compact ? (
+        <>
+          <View style={styles.transactionCompactMain}>{details}</View>
+          <View style={styles.transactionCompactActions}>{actions}</View>
+        </>
+      ) : (
+        <>{details}{actions}</>
+      )}
+      <Modal animationType="fade" transparent visible={menuOpen} onRequestClose={() => setMenuOpen(false)}>
+        <View style={styles.menuBackdrop}>
+          <Pressable accessibilityLabel="Close transaction menu" accessibilityRole="button" onPress={() => setMenuOpen(false)} style={StyleSheet.absoluteFill} />
+          <SafeAreaView edges={["bottom", "left", "right"]} style={styles.menuSheet}>
+            <View>
+              <View style={styles.menuHandle} />
+              <Pressable accessibilityRole="button" onPress={() => run(onEdit)} style={styles.menuAction}>
+                <Ionicons color={colors.text} name="create-outline" size={21} />
+                <Text style={styles.menuText}>Edit</Text>
+              </Pressable>
+              {pending && onIgnore ? (
+                <Pressable accessibilityRole="button" onPress={() => run(onIgnore)} style={styles.menuAction}>
+                  <Ionicons color={colors.text} name="eye-off-outline" size={21} />
+                  <Text style={styles.menuText}>Ignore</Text>
+                </Pressable>
+              ) : null}
+              <Pressable accessibilityRole="button" onPress={() => run(onRemove)} style={styles.menuAction}>
+                <Ionicons color={colors.coral} name="trash-outline" size={21} />
+                <Text style={styles.menuDeleteText}>Delete</Text>
+              </Pressable>
+            </View>
+          </SafeAreaView>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -305,10 +347,6 @@ const styles = StyleSheet.create({
   progressOver: { backgroundColor: colors.coral },
   used: { color: colors.primaryDark, fontSize: 13, fontWeight: "600", marginTop: spacing.sm },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
-  chipTextSelected: { color: colors.surface },
   grow: { flex: 1 },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 14, minHeight: 44, paddingHorizontal: spacing.sm },
   addButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.control, justifyContent: "center", minHeight: 48 },
@@ -316,11 +354,16 @@ const styles = StyleSheet.create({
   iconButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   pending: { backgroundColor: colors.coralSurface },
   transaction: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 72, paddingHorizontal: spacing.md },
+  transactionCompact: { alignItems: "stretch", flexDirection: "column", paddingVertical: spacing.sm },
+  transactionCompactActions: { alignSelf: "flex-end", flexDirection: "row", gap: spacing.sm },
+  transactionCompactMain: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   transactionIcon: { alignItems: "center", backgroundColor: colors.sageSurface, borderRadius: radii.pill, height: 40, justifyContent: "center", width: 40 },
   transactionTitle: { color: colors.text, fontSize: 14, fontWeight: "600" },
+  transactionHeading: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   meta: { color: colors.muted, fontSize: 12, marginTop: spacing.xs },
   confirm: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.pill, height: 44, justifyContent: "center", width: 44 },
   emptyText: { color: colors.muted, fontSize: 14, padding: spacing.md },
+  emptyMascot: { alignItems: "center", paddingTop: spacing.md },
   deeperToggle: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 72, padding: spacing.md },
   deeper: { borderTopColor: colors.border, borderTopWidth: 1, gap: spacing.md, padding: spacing.md },
   summaryRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
@@ -333,4 +376,10 @@ const styles = StyleSheet.create({
   modalHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.md },
   modalTitle: { color: colors.text, fontSize: 18, fontWeight: "700" },
   modalContent: { gap: spacing.sm, paddingBottom: spacing.lg },
+  menuBackdrop: { backgroundColor: "rgba(47,58,51,0.42)", flex: 1, justifyContent: "flex-end" },
+  menuSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: spacing.md },
+  menuHandle: { alignSelf: "center", backgroundColor: colors.border, borderRadius: radii.pill, height: 4, marginBottom: spacing.sm, width: 42 },
+  menuAction: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.md, minHeight: 52, paddingHorizontal: spacing.sm },
+  menuText: { color: colors.text, fontSize: 15, fontWeight: "600" },
+  menuDeleteText: { color: colors.coral, fontSize: 15, fontWeight: "600" },
 });

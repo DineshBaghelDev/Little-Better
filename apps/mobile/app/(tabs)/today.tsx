@@ -7,13 +7,13 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { Screen } from "../../src/components/Screen";
-import { Mascot, PrimaryButton, Surface } from "../../src/components/ui";
+import { Mascot, PrimaryButton, Surface, useAppearance } from "../../src/components/ui";
 import { scheduleLocalNotifications } from "../../src/notifications";
 import { readLocalTimer, type LocalTimer } from "../../src/offlineQueue";
 import { colors, radii, spacing } from "../../src/theme";
 
 function moneyText(value: number) {
-  return `Rs ${value.toLocaleString("en-IN")}`;
+  return `\u20b9${value.toLocaleString("en-IN")}`;
 }
 
 function timeText(value?: number) {
@@ -34,6 +34,10 @@ function tomorrowAt(hour: number) {
 
 export default function TodayTabScreen() {
   const today = useQuery(api.core.today);
+  const viewer = useQuery(api.core.viewer);
+  const appearance = useAppearance();
+  const accentText = { color: appearance.primaryDark };
+  const accentBorder = { borderColor: appearance.primary };
   const completeTask = useMutation(api.core.completeTask);
   const undoCompleteTask = useMutation(api.core.undoCompleteTask);
   const scheduleTask = useMutation(api.core.scheduleTask);
@@ -61,8 +65,14 @@ export default function TodayTabScreen() {
   }
 
   useEffect(() => {
-    readLocalTimer().then(setLocalTimer);
-  }, []);
+    if (viewer) readLocalTimer(viewer._id).then(setLocalTimer);
+  }, [viewer]);
+
+  useEffect(() => {
+    if (!lastCompleted) return;
+    const timeout = setTimeout(() => setLastCompleted(null), 5000);
+    return () => clearTimeout(timeout);
+  }, [lastCompleted]);
 
   useEffect(() => {
     if (!today?.settings?.notificationsEnabled) return;
@@ -125,7 +135,7 @@ export default function TodayTabScreen() {
             <Text style={styles.cardTitle}>How did today feel?</Text>
             <Text style={styles.meta}>Your evening reflection is ready</Text>
           </View>
-          <Text style={styles.link}>Reflect</Text>
+          <Text style={[styles.link, accentText]}>Reflect</Text>
         </Pressable>
       ) : null}
 
@@ -138,7 +148,7 @@ export default function TodayTabScreen() {
               {moneyText(today.budgetAlert.spent)} confirmed of {moneyText(today.budgetAlert.budget)}
             </Text>
           </View>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/(tabs)/money")} style={styles.roundAction}>
+          <Pressable accessibilityRole="button" onPress={() => router.push("/(tabs)/money")} style={[styles.roundAction, accentBorder]}>
             <Ionicons color={colors.coral} name="wallet-outline" size={21} />
           </Pressable>
         </Surface>
@@ -157,9 +167,9 @@ export default function TodayTabScreen() {
             accessibilityLabel={`Confirm ${transaction.category} expense`}
             accessibilityRole="button"
             onPress={() => updateTransaction({ status: "confirmed", transactionId: transaction._id })}
-            style={styles.roundAction}
+            style={[styles.roundAction, accentBorder]}
           >
-            <Ionicons color={colors.primary} name="checkmark" size={21} />
+            <Ionicons color={appearance.primary} name="checkmark" size={21} />
           </Pressable>
         </Surface>
       ))}
@@ -169,12 +179,12 @@ export default function TodayTabScreen() {
           <Surface style={styles.priorityCard}>
             <Rank value={1} />
             <View style={styles.grow}>
-              <Text style={styles.reason}>Active offline</Text>
+              <Text style={[styles.reason, accentText]}>Active offline</Text>
               <Text style={styles.cardTitle}>{localTimer.categoryName} session</Text>
               <Text style={styles.meta}>{localTimer.status === "paused" ? "Paused" : "Running"} locally</Text>
             </View>
-            <Pressable accessibilityRole="button" onPress={() => router.push("/focus")} style={styles.roundAction}>
-              <Ionicons color={colors.primary} name="timer-outline" size={21} />
+            <Pressable accessibilityLabel="Open focus session" accessibilityRole="button" onPress={() => router.push("/focus")} style={[styles.roundAction, accentBorder]}>
+              <Ionicons color={appearance.primary} name="timer-outline" size={21} />
             </Pressable>
           </Surface>
         ) : null}
@@ -184,12 +194,12 @@ export default function TodayTabScreen() {
               <Surface key={item.timer._id} style={styles.priorityCard}>
                 <Rank value={item.rank} />
                 <View style={styles.grow}>
-                  <Text style={styles.reason}>{item.reason}</Text>
+                  <Text style={[styles.reason, accentText]}>{item.reason}</Text>
                   <Text style={styles.cardTitle}>Active focus session</Text>
                   <Text style={styles.meta}>{item.timer.status === "paused" ? "Paused" : "Running"} now</Text>
                 </View>
-                <Pressable accessibilityRole="button" onPress={() => router.push("/focus")} style={styles.roundAction}>
-                  <Ionicons color={colors.primary} name="timer-outline" size={21} />
+                <Pressable accessibilityLabel="Open focus session" accessibilityRole="button" onPress={() => router.push("/focus")} style={[styles.roundAction, accentBorder]}>
+                  <Ionicons color={appearance.primary} name="timer-outline" size={21} />
                 </Pressable>
               </Surface>
             );
@@ -200,12 +210,12 @@ export default function TodayTabScreen() {
               <Surface key="focus-target" style={styles.priorityCard}>
                 <Rank value={item.rank} />
                 <View style={styles.grow}>
-                  <Text style={styles.reason}>{item.reason}</Text>
+                  <Text style={[styles.reason, accentText]}>{item.reason}</Text>
                   <Text style={styles.cardTitle}>{today?.focusCategory?.name ?? "Focus"} session</Text>
                   <Text style={styles.meta}>{item.progressLabel}</Text>
                 </View>
-                <Pressable accessibilityRole="button" onPress={startFocusSession} style={styles.roundAction}>
-                  <Ionicons color={colors.primary} name="play" size={19} />
+                <Pressable accessibilityLabel="Start focus session" accessibilityRole="button" onPress={startFocusSession} style={[styles.roundAction, accentBorder]}>
+                  <Ionicons color={appearance.primary} name="play" size={19} />
                 </Pressable>
               </Surface>
             );
@@ -216,7 +226,7 @@ export default function TodayTabScreen() {
             <Surface key={item.task._id} style={[styles.priorityCard, item.tone === "warning" && styles.warningCard]}>
               <Rank value={item.rank} />
               <View style={styles.grow}>
-                <Text style={[styles.reason, item.tone === "warning" && styles.warningText]}>{item.reason}</Text>
+                <Text style={[styles.reason, accentText, item.tone === "warning" && styles.warningText]}>{item.reason}</Text>
                 <Text style={styles.cardTitle}>{item.task.title}</Text>
                 <Text style={styles.meta}>{timeText(item.task.scheduledAt)}</Text>
                 {expanded ? (
@@ -231,15 +241,15 @@ export default function TodayTabScreen() {
                 ) : null}
                 <View style={styles.inlineActions}>
                   <Pressable accessibilityRole="button" onPress={() => setDetailsOpen(expanded ? null : item.task._id)}>
-                    <Text style={styles.link}>{expanded ? "Hide" : "Details"}</Text>
+                    <Text style={[styles.link, accentText]}>{expanded ? "Hide" : "Details"}</Text>
                   </Pressable>
                   <Pressable accessibilityRole="button" onPress={() => scheduleTask({ scheduledAt: tomorrowAt(9), taskId: item.task._id })}>
-                    <Text style={styles.link}>Reschedule</Text>
+                    <Text style={[styles.link, accentText]}>Reschedule</Text>
                   </Pressable>
                 </View>
               </View>
-              <Pressable accessibilityLabel="Complete task" accessibilityRole="button" onPress={() => complete(item.task._id)} style={styles.roundAction}>
-                <Ionicons color={colors.primary} name="checkmark" size={21} />
+              <Pressable accessibilityLabel="Complete task" accessibilityRole="button" onPress={() => complete(item.task._id)} style={[styles.roundAction, accentBorder]}>
+                <Ionicons color={appearance.primary} name="checkmark" size={21} />
               </Pressable>
             </Surface>
           );
@@ -250,18 +260,16 @@ export default function TodayTabScreen() {
         <Surface style={styles.undoToast}>
           <Text style={styles.cardTitle}>Task completed</Text>
           <Pressable accessibilityRole="button" onPress={undoComplete}>
-            <Text style={styles.link}>Undo</Text>
+            <Text style={[styles.link, accentText]}>Undo</Text>
           </Pressable>
         </Surface>
       ) : null}
 
       {!today?.rankedItems.length && !today?.laterToday.length ? (
         <Surface style={styles.empty}>
-          <Mascot size={72} variant="complete" />
-          <View style={styles.grow}>
-            <Text style={styles.cardTitle}>Nothing needs ranking</Text>
-            <Text style={styles.meta}>Add one planned task when you want Today to guide you.</Text>
-          </View>
+          <Mascot size={148} variant="celebrating" />
+          <Text style={styles.emptyTitle}>All clear for now</Text>
+          <Text style={styles.emptyMeta}>Nothing needs ranking. Add a planned task whenever you want Today to guide you.</Text>
           <View style={styles.emptyAction}>
             <PrimaryButton label="Add task" onPress={() => router.push("/quick-add")} />
           </View>
@@ -274,7 +282,7 @@ export default function TodayTabScreen() {
             <Ionicons color={colors.muted} name="time-outline" size={20} />
             <View style={styles.grow}>
               <Text style={styles.cardTitle}>Later today</Text>
-              <Text style={styles.meta}>{today.laterToday.length} tasks</Text>
+              <Text style={styles.meta}>{today.laterToday.length} {today.laterToday.length === 1 ? "task" : "tasks"}</Text>
             </View>
             <Ionicons color={colors.muted} name={laterOpen ? "chevron-up" : "chevron-down"} size={18} />
           </Pressable>
@@ -341,8 +349,10 @@ const styles = StyleSheet.create({
     width: 44,
   },
   undoToast: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", padding: spacing.md },
-  empty: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.md, padding: spacing.md },
-  emptyAction: { minWidth: 120 },
+  empty: { alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
+  emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "700", marginTop: spacing.sm },
+  emptyMeta: { color: colors.muted, fontSize: 13, lineHeight: 19, marginBottom: spacing.sm, textAlign: "center" },
+  emptyAction: { minWidth: 160 },
   laterRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 72, padding: spacing.md },
   laterDetails: { borderTopColor: colors.border, borderTopWidth: 1, padding: spacing.md },
   laterTask: { color: colors.muted, fontSize: 14, paddingVertical: spacing.sm },

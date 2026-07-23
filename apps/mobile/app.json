@@ -10,6 +10,15 @@
     "plugins": [
       "expo-router",
       [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FAF8F2",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain"
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#6D8B6A",
@@ -22,12 +31,16 @@
           "microphonePermission": "Allow Little Better to capture voice notes.",
           "speechRecognitionPermission": "Allow Little Better to turn speech into editable text."
         }
-      ]
+      ],
+      "expo-secure-store",
+      "./plugins/with-payment-notifications"
     ],
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "com.littlebetter.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#FAF8F2",
         "foregroundImage": "./assets/android-icon-foreground.png",
