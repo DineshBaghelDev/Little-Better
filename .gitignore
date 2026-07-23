@@ -1,7 +1,10 @@
 node_modules/
 .expo/
 .convex/local/
-.claude/settings.local.json
+.claude/
+docs/
+specs/
+project-requirements/
 *.log
 .env
 .env.local
