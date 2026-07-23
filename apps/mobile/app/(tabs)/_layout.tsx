@@ -13,6 +13,7 @@ export default function TabsLayout() {
   const appearance = resolveAppearance(settings?.settings);
   const floating = appearance.navStyle === "floating";
   const compact = appearance.navStyle === "compact";
+  const sideMargin = floating ? 18 : 10;
   return (
     <Tabs
       screenOptions={{
@@ -23,17 +24,17 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderColor: colors.border,
-          borderRadius: floating ? 26 : 0,
+          borderRadius: floating ? 26 : 18,
           borderTopColor: colors.border,
           borderWidth: floating ? 1 : 0,
           bottom: floating ? Math.max(insets.bottom, 12) : 0,
           elevation: floating ? 6 : 0,
           height: (compact ? 58 : 72) + (floating ? 0 : insets.bottom),
-          left: floating ? 18 : 0,
+          left: Math.max(insets.left, sideMargin),
           paddingBottom: floating ? (compact ? 4 : 8) : Math.max(insets.bottom, 4),
           paddingTop: compact ? 4 : 8,
           position: "absolute",
-          right: floating ? 18 : 0,
+          right: Math.max(insets.right, sideMargin),
           shadowColor: colors.text,
           shadowOpacity: floating ? 0.08 : 0,
           shadowRadius: 14,
