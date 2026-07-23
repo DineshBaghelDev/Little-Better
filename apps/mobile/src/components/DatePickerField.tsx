@@ -95,9 +95,11 @@ export function DatePickerField({
                       onChange(dateInput(time));
                       setOpen(false);
                     }}
-                    style={[styles.day, isSelected && { backgroundColor: appearance.primary }]}
+                    style={styles.day}
                   >
-                    <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{date?.getDate() ?? ""}</Text>
+                    <View style={[styles.dayCircle, isSelected && { backgroundColor: appearance.primary }]}>
+                      <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{date?.getDate() ?? ""}</Text>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -156,8 +158,8 @@ const styles = StyleSheet.create({
   iconButton: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
   month: { color: colors.text, fontSize: 15, fontWeight: "700" },
   grid: { flexDirection: "row", flexWrap: "wrap" },
-  day: { alignItems: "center", borderRadius: radii.pill, height: 40, justifyContent: "center", width: `${100 / 7}%` as `${number}%` },
-  daySelected: { backgroundColor: colors.primary },
+  day: { alignItems: "center", height: 40, justifyContent: "center", width: `${100 / 7}%` as `${number}%` },
+  dayCircle: { alignItems: "center", borderRadius: radii.pill, height: 40, justifyContent: "center", width: 40 },
   dayText: { color: colors.text, fontSize: 14, fontWeight: "600" },
   dayTextSelected: { color: colors.surface },
   today: { alignItems: "center", minHeight: 44, justifyContent: "center" },
