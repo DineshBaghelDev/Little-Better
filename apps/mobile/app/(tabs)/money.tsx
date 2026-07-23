@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "../../convex/_generated/api";
@@ -259,6 +259,7 @@ function TransactionRow({
   transaction: Doc<"transactions">;
 }) {
   const type = transaction.type ?? "expense";
+  const compact = useWindowDimensions().width < 360;
   const [menuOpen, setMenuOpen] = useState(false);
 
   function run(action: () => void) {
@@ -266,8 +267,8 @@ function TransactionRow({
     action();
   }
 
-  return (
-    <View style={[styles.transaction, pending && styles.pending]}>
+  const details = (
+    <>
       <View style={styles.transactionIcon}>
         <Ionicons color={pending ? colors.coral : colors.primaryDark} name={type === "income" ? "arrow-down" : "receipt-outline"} size={20} />
       </View>
@@ -282,6 +283,10 @@ function TransactionRow({
         {transaction.source ? <Text style={styles.meta}>{transaction.source}{transaction.resolution ? ` - ${transaction.resolution}` : ""}</Text> : null}
         {transaction.note ? <Text style={styles.meta}>{transaction.note}</Text> : null}
       </View>
+    </>
+  );
+  const actions = (
+    <>
       {pending && onConfirm ? (
         <Pressable accessibilityLabel={`Confirm ${transaction.category} transaction`} accessibilityRole="button" onPress={onConfirm} style={styles.confirm}>
           <Ionicons color={colors.surface} name="checkmark" size={20} />
@@ -290,6 +295,19 @@ function TransactionRow({
       <Pressable accessibilityLabel={`More actions for ${transaction.category} transaction`} accessibilityRole="button" onPress={() => setMenuOpen(true)} style={styles.iconButton}>
         <Ionicons color={colors.text} name="ellipsis-vertical" size={20} />
       </Pressable>
+    </>
+  );
+
+  return (
+    <View style={[styles.transaction, pending && styles.pending, compact && styles.transactionCompact]}>
+      {compact ? (
+        <>
+          <View style={styles.transactionCompactMain}>{details}</View>
+          <View style={styles.transactionCompactActions}>{actions}</View>
+        </>
+      ) : (
+        <>{details}{actions}</>
+      )}
       <Modal animationType="fade" transparent visible={menuOpen} onRequestClose={() => setMenuOpen(false)}>
         <View style={styles.menuBackdrop}>
           <Pressable accessibilityLabel="Close transaction menu" accessibilityRole="button" onPress={() => setMenuOpen(false)} style={StyleSheet.absoluteFill} />
@@ -336,6 +354,9 @@ const styles = StyleSheet.create({
   iconButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   pending: { backgroundColor: colors.coralSurface },
   transaction: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 72, paddingHorizontal: spacing.md },
+  transactionCompact: { alignItems: "stretch", flexDirection: "column", paddingVertical: spacing.sm },
+  transactionCompactActions: { alignSelf: "flex-end", flexDirection: "row", gap: spacing.sm },
+  transactionCompactMain: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   transactionIcon: { alignItems: "center", backgroundColor: colors.sageSurface, borderRadius: radii.pill, height: 40, justifyContent: "center", width: 40 },
   transactionTitle: { color: colors.text, fontSize: 14, fontWeight: "600" },
   transactionHeading: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
