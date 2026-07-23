@@ -188,7 +188,54 @@ for ($row = 0; $row -lt 3; $row++) {
 }
 
 $graphics.Dispose()
-$output = Join-Path $PSScriptRoot '..\assets\sprout-spritesheet.png'
+$assets = Join-Path $PSScriptRoot '..\assets'
+$output = Join-Path $assets 'sprout-spritesheet.png'
 $bitmap.Save($output, [System.Drawing.Imaging.ImageFormat]::Png)
+
+function New-Asset([string]$name, [int]$size, [bool]$transparent, [int]$sproutSize) {
+  $asset = [System.Drawing.Bitmap]::new($size, $size)
+  $assetGraphics = [System.Drawing.Graphics]::FromImage($asset)
+  $assetGraphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+  $assetGraphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+  if ($transparent) {
+    $assetGraphics.Clear([System.Drawing.Color]::Transparent)
+  } else {
+    $assetGraphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#FAF8F2'))
+  }
+  $offset = [int](($size - $sproutSize) / 2)
+  $assetGraphics.DrawImage($bitmap, [System.Drawing.Rectangle]::new($offset, $offset, $sproutSize, $sproutSize), 0, 0, $frame, $frame, [System.Drawing.GraphicsUnit]::Pixel)
+  $assetGraphics.Dispose()
+  $asset.Save((Join-Path $assets $name), [System.Drawing.Imaging.ImageFormat]::Png)
+  return $asset
+}
+
+$icon = New-Asset 'icon.png' 1024 $false 820
+$icon.Dispose()
+$splash = New-Asset 'splash-icon.png' 1024 $true 760
+$splash.Dispose()
+$foreground = New-Asset 'android-icon-foreground.png' 1024 $true 600
+
+$background = [System.Drawing.Bitmap]::new(1024, 1024)
+$backgroundGraphics = [System.Drawing.Graphics]::FromImage($background)
+$backgroundGraphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#FAF8F2'))
+$backgroundGraphics.Dispose()
+$background.Save((Join-Path $assets 'android-icon-background.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+$background.Dispose()
+
+$monochrome = [System.Drawing.Bitmap]::new(1024, 1024)
+for ($y = 0; $y -lt 1024; $y++) {
+  for ($x = 0; $x -lt 1024; $x++) {
+    $alpha = $foreground.GetPixel($x, $y).A
+    if ($alpha -gt 0) {
+      $monochrome.SetPixel($x, $y, [System.Drawing.Color]::FromArgb($alpha, 38, 53, 42))
+    }
+  }
+}
+$foreground.Dispose()
+$monochrome.Save((Join-Path $assets 'android-icon-monochrome.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+$monochrome.Dispose()
+
+$favicon = New-Asset 'favicon.png' 64 $false 58
+$favicon.Dispose()
 $bitmap.Dispose()
 Write-Output $output
