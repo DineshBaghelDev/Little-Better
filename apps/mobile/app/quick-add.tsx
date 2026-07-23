@@ -156,7 +156,7 @@ export default function QuickAddModal() {
     if (selected === "Expense") {
       const amount = Number(expense.amount);
       const accountId = expense.accountId ?? money?.accounts[0]?._id;
-      if (!Number.isFinite(amount) || amount <= 0 || !accountId) return;
+      if (!Number.isFinite(amount) || amount <= 0) return;
       queued = await saveOrQueue("addExpense", {
         accountId,
         amount,
@@ -187,7 +187,7 @@ export default function QuickAddModal() {
         if (action.type === "expense") {
           const amount = Number(action.amount);
           const accountId = expense.accountId ?? money?.accounts[0]?._id;
-          if (Number.isFinite(amount) && amount > 0 && accountId) queued = (await saveOrQueue("addExpense", {
+          if (Number.isFinite(amount) && amount > 0) queued = (await saveOrQueue("addExpense", {
             accountId,
             amount,
             category: action.category || "General",
