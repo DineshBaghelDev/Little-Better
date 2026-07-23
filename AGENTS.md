@@ -4,13 +4,12 @@ This is a Bun-ready monorepo for the Little Better mobile app.
 
 - Mobile app: `apps/mobile`
 - Convex backend: `apps/mobile/convex`
-- Product requirements: `project-requirements/`
-- Setup and decision logs: `docs/`
+- Product requirements and decision logs are local-only. Do not commit `docs/`, `specs/`, `project-requirements/`, or `.claude/`.
 
 ## Working Guidelines
-- Creating a new branch while working and merge them after done
-- Always commit your work after each and every change u do
-- Maintain a log of jobs you did, your decisions in docs/ folder
+- Create a new branch while working and merge it after done.
+- Commit each completed logical change.
+- Do not commit secrets, deployment URLs, credentials, local logs, APK artifacts, or personal screenshots.
 
 ## Expo
 
@@ -18,12 +17,4 @@ Expo has changed. Read the exact versioned docs at https://docs.expo.dev/version
 
 ## Convex
 
-Convex currently uses the cloud development deployment:
-
-- Team: `REDACTED`
-- Project: `little-better`
-- Deployment: `REDACTED`
-- Client URL: `REDACTED`
-- Dashboard: `REDACTED`
-
-Run Convex commands from `apps/mobile`.
+Run Convex commands from `apps/mobile`. Keep deployment details in local environment files only.

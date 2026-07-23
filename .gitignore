@@ -1,8 +1,13 @@
 node_modules/
 .expo/
 .convex/local/
-.claude/settings.local.json
+.claude/
+docs/
+specs/
+project-requirements/
+previous-assets/
 *.log
+*.apk
 .env
 .env.local
 package-lock.json
@@ -13,5 +18,7 @@ build/
 ios/
 android/
 web-build/
+apps/mobile/public-screenshot-export/
+assets/screenshots/test.png
 expo-env.d.ts
 *.tsbuildinfo
