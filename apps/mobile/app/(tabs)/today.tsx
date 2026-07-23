@@ -183,7 +183,7 @@ export default function TodayTabScreen() {
               <Text style={styles.cardTitle}>{localTimer.categoryName} session</Text>
               <Text style={styles.meta}>{localTimer.status === "paused" ? "Paused" : "Running"} locally</Text>
             </View>
-            <Pressable accessibilityRole="button" onPress={() => router.push("/focus")} style={[styles.roundAction, accentBorder]}>
+            <Pressable accessibilityLabel="Open focus session" accessibilityRole="button" onPress={() => router.push("/focus")} style={[styles.roundAction, accentBorder]}>
               <Ionicons color={appearance.primary} name="timer-outline" size={21} />
             </Pressable>
           </Surface>
@@ -198,7 +198,7 @@ export default function TodayTabScreen() {
                   <Text style={styles.cardTitle}>Active focus session</Text>
                   <Text style={styles.meta}>{item.timer.status === "paused" ? "Paused" : "Running"} now</Text>
                 </View>
-                <Pressable accessibilityRole="button" onPress={() => router.push("/focus")} style={[styles.roundAction, accentBorder]}>
+                <Pressable accessibilityLabel="Open focus session" accessibilityRole="button" onPress={() => router.push("/focus")} style={[styles.roundAction, accentBorder]}>
                   <Ionicons color={appearance.primary} name="timer-outline" size={21} />
                 </Pressable>
               </Surface>
@@ -214,7 +214,7 @@ export default function TodayTabScreen() {
                   <Text style={styles.cardTitle}>{today?.focusCategory?.name ?? "Focus"} session</Text>
                   <Text style={styles.meta}>{item.progressLabel}</Text>
                 </View>
-                <Pressable accessibilityRole="button" onPress={startFocusSession} style={[styles.roundAction, accentBorder]}>
+                <Pressable accessibilityLabel="Start focus session" accessibilityRole="button" onPress={startFocusSession} style={[styles.roundAction, accentBorder]}>
                   <Ionicons color={appearance.primary} name="play" size={19} />
                 </Pressable>
               </Surface>

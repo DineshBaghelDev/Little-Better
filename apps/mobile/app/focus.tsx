@@ -97,6 +97,7 @@ export default function FocusScreen() {
       <View style={styles.controls}>
         <View style={styles.controlGroup}>
           <Pressable
+            accessibilityLabel={paused ? "Resume focus session" : "Pause focus session"}
             accessibilityRole="button"
             onPress={async () => {
               if (!timer) return;
@@ -120,6 +121,7 @@ export default function FocusScreen() {
         </View>
         <View style={styles.controlGroup}>
           <Pressable
+            accessibilityLabel="End focus session"
             accessibilityRole="button"
             onPress={async () => {
               if (timer && "_id" in timer) await endFocus({ timerId: timer._id });
