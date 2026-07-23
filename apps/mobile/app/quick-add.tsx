@@ -29,6 +29,7 @@ export default function QuickAddModal() {
   const ensureMoneyDefaults = useMutation(api.core.ensureMoneyDefaults);
   const addTask = useMutation(api.core.addTask);
   const addExpense = useMutation(api.core.addExpense);
+  const addCategory = useMutation(api.core.addCategory);
   const detectPaymentNotification = useMutation(api.core.detectPaymentNotification);
   const removeCategory = useMutation(api.core.removeCategory);
   const addManualFocus = useMutation(api.core.addManualFocus);
@@ -278,6 +279,7 @@ export default function QuickAddModal() {
                 />
                 <CategoryDropdown
                   categories={money?.categories.filter((item) => item.type === expense.type) ?? []}
+                  onCreate={(name) => addCategory({ name, type: expense.type })}
                   onDelete={(categoryId) => removeCategory({ categoryId: categoryId as Id<"transactionCategories"> })}
                   onSelect={(category) => setExpense((current) => ({ ...current, category }))}
                   selected={expense.category}

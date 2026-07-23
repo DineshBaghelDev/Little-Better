@@ -33,10 +33,17 @@ export default function MoneyScreen() {
   const ensureMoneyDefaults = useMutation(api.core.ensureMoneyDefaults);
   const updateTransaction = useMutation(api.core.updateTransaction);
   const removeTransaction = useMutation(api.core.removeTransaction);
-  const money = useQuery(api.core.money, {});
+  const addAccount = useMutation(api.core.addAccount);
+  const updateAccount = useMutation(api.core.updateAccount);
+  const archiveAccount = useMutation(api.core.archiveAccount);
+  const addCategory = useMutation(api.core.addCategory);
+  const removeCategory = useMutation(api.core.removeCategory);
   const appearance = useAppearance();
   const [deeperOpen, setDeeperOpen] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState<Id<"accounts"> | undefined>();
   const [editingTransaction, setEditingTransaction] = useState<Id<"transactions"> | null>(null);
+  const [editingAccountId, setEditingAccountId] = useState<Id<"accounts"> | null>(null);
+  const [accountDraft, setAccountDraft] = useState({ balance: "", name: "" });
   const [expense, setExpense] = useState({
     accountId: undefined as Id<"accounts"> | undefined,
     amount: "",
@@ -48,6 +55,7 @@ export default function MoneyScreen() {
     status: "confirmed" as "pending" | "confirmed",
     type: "expense" as TransactionType,
   });
+  const money = useQuery(api.core.money, selectedAccountId ? { accountId: selectedAccountId } : {});
   const categories = money?.categories.filter((item) => item.type === expense.type) ?? [];
   const budget = money?.budget ?? 0;
   const spent = money?.spent ?? 0;
@@ -78,6 +86,20 @@ export default function MoneyScreen() {
   function resetTransaction() {
     setEditingTransaction(null);
     setExpense((current) => ({ ...current, amount: "", merchant: "", note: "", status: "confirmed" }));
+  }
+
+  function editAccount(account: Doc<"accounts"> & { baseBalance: number }) {
+    setEditingAccountId(account._id);
+    setAccountDraft({ balance: String(account.baseBalance), name: account.name });
+  }
+
+  async function saveAccount() {
+    const balance = Number(accountDraft.balance);
+    if (!accountDraft.name.trim() || !Number.isFinite(balance)) return;
+    if (editingAccountId) await updateAccount({ accountId: editingAccountId, balance, name: accountDraft.name });
+    else await addAccount({ balance, name: accountDraft.name });
+    setEditingAccountId(null);
+    setAccountDraft({ balance: "", name: "" });
   }
 
   function setType(type: TransactionType) {
@@ -121,11 +143,16 @@ export default function MoneyScreen() {
         <TextInput accessibilityLabel="Merchant or payer" onChangeText={(merchant) => setExpense((current) => ({ ...current, merchant }))} placeholder={expense.type === "income" ? "Payer (optional)" : "Merchant (optional)"} placeholderTextColor={colors.muted} style={styles.input} value={expense.merchant} />
         <CategoryDropdown
           categories={categories}
-          manageable={false}
-          onDelete={() => undefined}
+          onCreate={(name) => addCategory({ name, type: expense.type })}
+          onDelete={(categoryId) => removeCategory({ categoryId: categoryId as Id<"transactionCategories"> })}
           onSelect={(category) => setExpense((current) => ({ ...current, category }))}
           selected={expense.category}
         />
+        <View style={styles.chips}>
+          {(money?.accounts ?? []).map((account) => (
+            <Chip key={account._id} label={account.name} selected={(expense.accountId ?? money?.accounts[0]?._id) === account._id} onPress={() => setExpense((current) => ({ ...current, accountId: account._id }))} />
+          ))}
+        </View>
         <DatePickerField label="Transaction date" onChange={(date) => setExpense((current) => ({ ...current, date }))} value={expense.date} />
         <TextInput accessibilityLabel="Transaction note" onChangeText={(note) => setExpense((current) => ({ ...current, note }))} placeholder="Note (optional)" placeholderTextColor={colors.muted} style={styles.input} value={expense.note} />
       </>
@@ -199,12 +226,51 @@ export default function MoneyScreen() {
         </Pressable>
         {deeperOpen ? (
           <View style={styles.deeper}>
+            <View style={styles.summaryRow}>
+              <View>
+                <Text style={styles.transactionTitle}>Net worth</Text>
+                <Text style={styles.meta}>Across active accounts</Text>
+              </View>
+              <Text style={styles.transactionTitle}>{moneyText(money?.netWorth ?? 0)}</Text>
+            </View>
+            <View style={styles.chips}>
+              <Chip label="All accounts" selected={!selectedAccountId} onPress={() => setSelectedAccountId(undefined)} />
+              {(money?.accounts ?? []).map((account) => (
+                <Chip key={`filter-${account._id}`} label={account.name} selected={selectedAccountId === account._id} onPress={() => setSelectedAccountId(account._id)} />
+              ))}
+            </View>
+            <View style={styles.accountForm}>
+              <TextInput accessibilityLabel="Account name" onChangeText={(name) => setAccountDraft((current) => ({ ...current, name }))} placeholder="Account name" placeholderTextColor={colors.muted} style={[styles.input, styles.grow]} value={accountDraft.name} />
+              <TextInput accessibilityLabel="Opening balance" keyboardType="decimal-pad" onChangeText={(balance) => setAccountDraft((current) => ({ ...current, balance }))} placeholder="Balance" placeholderTextColor={colors.muted} style={[styles.input, styles.balanceInput]} value={accountDraft.balance} />
+              <Pressable accessibilityLabel={editingAccountId ? "Save account" : "Add account"} accessibilityRole="button" onPress={saveAccount} style={[styles.confirm, { backgroundColor: appearance.primary }]}>
+                <Ionicons color={colors.surface} name={editingAccountId ? "checkmark" : "add"} size={20} />
+              </Pressable>
+            </View>
             {(money?.accounts ?? []).map((account) => (
               <View key={account._id} style={styles.summaryRow}>
-                <Text style={styles.transactionTitle}>{account.name}</Text>
-                <Text style={styles.meta}>{moneyText(account.balance)}</Text>
+                <View style={styles.grow}>
+                  <Text style={styles.transactionTitle}>{account.name}</Text>
+                  <Text style={styles.meta}>
+                    {moneyText(account.balance)} current - {moneyText(account.baseBalance)} opening
+                  </Text>
+                </View>
+                <Pressable accessibilityLabel={`Edit ${account.name} account`} accessibilityRole="button" onPress={() => editAccount(account)} style={styles.smallIconButton}>
+                  <Ionicons color={colors.text} name="create-outline" size={18} />
+                </Pressable>
+                <Pressable
+                  accessibilityLabel={`Archive ${account.name} account`}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    if (selectedAccountId === account._id) setSelectedAccountId(undefined);
+                    archiveAccount({ accountId: account._id });
+                  }}
+                  style={styles.smallIconButton}
+                >
+                  <Ionicons color={colors.coral} name="archive-outline" size={18} />
+                </Pressable>
               </View>
             ))}
+            <View style={styles.divider} />
             {(money?.summary ?? []).map((item) => (
               <View key={`${item.type}-${item.category}`} style={styles.barRow}>
                 <View style={styles.barLabel}>
@@ -349,8 +415,11 @@ const styles = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   grow: { flex: 1 },
   input: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, fontSize: 14, minHeight: 44, paddingHorizontal: spacing.sm },
+  accountForm: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   addButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.control, justifyContent: "center", minHeight: 48 },
   addButtonText: { color: colors.surface, fontSize: 15, fontWeight: "700" },
+  balanceInput: { maxWidth: 118 },
+  divider: { backgroundColor: colors.border, height: 1 },
   iconButton: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
   pending: { backgroundColor: colors.coralSurface },
   transaction: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 72, paddingHorizontal: spacing.md },
@@ -367,6 +436,7 @@ const styles = StyleSheet.create({
   deeperToggle: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 72, padding: spacing.md },
   deeper: { borderTopColor: colors.border, borderTopWidth: 1, gap: spacing.md, padding: spacing.md },
   summaryRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  smallIconButton: { alignItems: "center", height: 40, justifyContent: "center", width: 40 },
   barRow: { gap: spacing.sm },
   barLabel: { flexDirection: "row", gap: spacing.sm, justifyContent: "space-between" },
   barTrack: { backgroundColor: colors.sageSurface, borderRadius: radii.pill, height: 10, overflow: "hidden" },

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { colors, radii, spacing } from "../theme";
 import { useAppearance } from "./ui";
@@ -10,12 +10,14 @@ type Category = { _id: string; name: string };
 export function CategoryDropdown({
   categories,
   manageable = true,
+  onCreate,
   onDelete,
   onSelect,
   selected,
 }: {
   categories: Category[];
   manageable?: boolean;
+  onCreate?: (name: string) => void;
   onDelete: (id: string) => void;
   onSelect: (name: string) => void;
   selected: string;
@@ -23,6 +25,16 @@ export function CategoryDropdown({
   const appearance = useAppearance();
   const [open, setOpen] = useState(false);
   const [managing, setManaging] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  function createCategory() {
+    const name = newName.trim();
+    if (!name || !onCreate) return;
+    onCreate(name);
+    onSelect(name);
+    setNewName("");
+    setOpen(false);
+  }
 
   return (
     <View style={styles.container}>
@@ -67,6 +79,21 @@ export function CategoryDropdown({
                     </Pressable>
                   </View>
                 ))}
+              </View>
+            ) : null}
+            {onCreate ? (
+              <View style={styles.createRow}>
+                <TextInput
+                  accessibilityLabel="New category name"
+                  onChangeText={setNewName}
+                  placeholder="New category"
+                  placeholderTextColor={colors.muted}
+                  style={styles.createInput}
+                  value={newName}
+                />
+                <Pressable accessibilityLabel="Add category" accessibilityRole="button" onPress={createCategory} style={styles.createButton}>
+                  <Ionicons color={colors.surface} name="add" size={20} />
+                </Pressable>
               </View>
             ) : null}
           </ScrollView>
@@ -139,4 +166,7 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.md,
   },
   deleteButton: { alignItems: "center", height: 52, justifyContent: "center", width: 56 },
+  createRow: { alignItems: "center", borderTopColor: colors.border, borderTopWidth: 1, flexDirection: "row", gap: spacing.sm, padding: spacing.sm },
+  createInput: { backgroundColor: colors.background, borderColor: colors.border, borderRadius: radii.control, borderWidth: 1, color: colors.text, flex: 1, fontSize: 14, minHeight: 44, paddingHorizontal: spacing.sm },
+  createButton: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.pill, height: 44, justifyContent: "center", width: 44 },
 });
