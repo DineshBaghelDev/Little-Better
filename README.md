@@ -4,7 +4,7 @@ Little Better is a privacy-minded daily planning app for doing one thing a littl
 
 The app is built with Expo, React Native, Expo Router, and Convex.
 
-![Little Better overview](docs/screenshots/overview.svg)
+![Little Better Today screen](assets/screenshots/today.png)
 
 ## Features
 
@@ -23,17 +23,21 @@ The app is built with Expo, React Native, Expo Router, and Convex.
 
 All screenshots below use demo data.
 
+| Login | Onboarding |
+| --- | --- |
+| ![Login screen](assets/screenshots/login.png) | ![Onboarding screen](assets/screenshots/onboarding.png) |
+
 | Today | Money |
 | --- | --- |
-| ![Today screen](docs/screenshots/today.svg) | ![Money screen](docs/screenshots/money.svg) |
+| ![Today screen](assets/screenshots/today.png) | ![Money screen](assets/screenshots/money.png) |
 
 | Calendar | Progress |
 | --- | --- |
-| ![Calendar screen](docs/screenshots/calendar.svg) | ![Progress screen](docs/screenshots/progress.svg) |
+| ![Calendar screen](assets/screenshots/calendar.png) | ![Progress screen](assets/screenshots/progress.png) |
 
 ### Themes
 
-![Theme gallery](docs/screenshots/themes.svg)
+![Theme controls](assets/screenshots/themes.png)
 
 Little Better currently ships these app themes:
 
@@ -51,9 +55,7 @@ apps/mobile/app/          Expo Router screens
 apps/mobile/convex/       Convex schema and backend functions
 apps/mobile/src/          Shared parser, UI, notification, and offline helpers
 apps/mobile/assets/       Icons, splash art, and Sprout sprite sheet
-docs/                     Implementation logs and project notes
-project-requirements/     Product design source material
-specs/                    Implementation specs and audits
+assets/screenshots/       Public demo screenshots
 ```
 
 ## Tech Stack
