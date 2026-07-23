@@ -291,9 +291,10 @@ function TransactionRow({
         <Ionicons color={colors.text} name="ellipsis-vertical" size={20} />
       </Pressable>
       <Modal animationType="fade" transparent visible={menuOpen} onRequestClose={() => setMenuOpen(false)}>
-        <Pressable accessibilityRole="button" onPress={() => setMenuOpen(false)} style={styles.menuBackdrop}>
+        <View style={styles.menuBackdrop}>
+          <Pressable accessibilityLabel="Close transaction menu" accessibilityRole="button" onPress={() => setMenuOpen(false)} style={StyleSheet.absoluteFill} />
           <SafeAreaView edges={["bottom", "left", "right"]} style={styles.menuSheet}>
-            <Pressable accessibilityRole="none" onPress={(event) => event.stopPropagation()}>
+            <View>
               <View style={styles.menuHandle} />
               <Pressable accessibilityRole="button" onPress={() => run(onEdit)} style={styles.menuAction}>
                 <Ionicons color={colors.text} name="create-outline" size={21} />
@@ -309,9 +310,9 @@ function TransactionRow({
                 <Ionicons color={colors.coral} name="trash-outline" size={21} />
                 <Text style={styles.menuDeleteText}>Delete</Text>
               </Pressable>
-            </Pressable>
+            </View>
           </SafeAreaView>
-        </Pressable>
+        </View>
       </Modal>
     </View>
   );
