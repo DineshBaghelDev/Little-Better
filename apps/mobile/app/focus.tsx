@@ -104,6 +104,8 @@ export default function FocusScreen() {
           <Pressable
             accessibilityLabel={paused ? "Resume focus session" : "Pause focus session"}
             accessibilityRole="button"
+            accessibilityState={{ disabled: !timer }}
+            disabled={!timer}
             onPress={async () => {
               if (!timer) return;
               if ("_id" in timer) {
@@ -126,7 +128,7 @@ export default function FocusScreen() {
                 if (viewer) await saveLocalTimer(viewer._id, next);
               }
             }}
-            style={styles.control}
+            style={[styles.control, !timer && styles.controlDisabled]}
           >
             <Ionicons color={colors.text} name={paused ? "play" : "pause"} size={24} />
           </Pressable>
@@ -136,6 +138,8 @@ export default function FocusScreen() {
           <Pressable
             accessibilityLabel="End focus session"
             accessibilityRole="button"
+            accessibilityState={{ disabled: !timer }}
+            disabled={!timer}
             onPress={async () => {
               if (timer && "_id" in timer) await endFocus({ timerId: timer._id });
               else if (timer) {
@@ -150,7 +154,7 @@ export default function FocusScreen() {
               }
               router.back();
             }}
-            style={styles.control}
+            style={[styles.control, !timer && styles.controlDisabled]}
           >
             <Ionicons color={colors.coral} name="stop" size={22} />
           </Pressable>
@@ -180,5 +184,6 @@ const styles = StyleSheet.create({
   controls: { flexDirection: "row", justifyContent: "space-around", paddingBottom: spacing.lg },
   controlGroup: { alignItems: "center", gap: spacing.sm },
   control: { alignItems: "center", backgroundColor: colors.surface, borderRadius: radii.pill, height: 56, justifyContent: "center", width: 56 },
+  controlDisabled: { opacity: 0.5 },
   controlLabel: { color: colors.text, fontSize: 12 },
 });
