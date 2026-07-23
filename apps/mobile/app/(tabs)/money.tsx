@@ -39,7 +39,7 @@ export default function MoneyScreen() {
   const addCategory = useMutation(api.core.addCategory);
   const removeCategory = useMutation(api.core.removeCategory);
   const appearance = useAppearance();
-  const [deeperOpen, setDeeperOpen] = useState(false);
+  const transactionListHeight = Math.max(520, Math.round(useWindowDimensions().height * 0.78));
   const [selectedAccountId, setSelectedAccountId] = useState<Id<"accounts"> | undefined>();
   const [editingTransaction, setEditingTransaction] = useState<Id<"transactions"> | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<Id<"accounts"> | null>(null);
@@ -199,33 +199,33 @@ export default function MoneyScreen() {
 
       <SectionLabel>Recent confirmed</SectionLabel>
       <Surface>
-        {(money?.confirmed ?? []).map((transaction) => (
-          <TransactionRow
-            key={transaction._id}
-            transaction={transaction}
-            onEdit={() => editTransaction(transaction)}
-            onRemove={() => removeTransaction({ transactionId: transaction._id })}
-          />
-        ))}
-        {money?.confirmed.length === 0 ? (
-          <View style={styles.emptyMascot}>
-            <Mascot size={124} variant="watering" />
-            <Text style={styles.emptyText}>No confirmed transactions yet.</Text>
-          </View>
-        ) : null}
+        <ScrollView nestedScrollEnabled style={{ maxHeight: transactionListHeight }}>
+          {(money?.confirmed ?? []).map((transaction) => (
+            <TransactionRow
+              key={transaction._id}
+              transaction={transaction}
+              onEdit={() => editTransaction(transaction)}
+              onRemove={() => removeTransaction({ transactionId: transaction._id })}
+            />
+          ))}
+          {money?.confirmed.length === 0 ? (
+            <View style={styles.emptyMascot}>
+              <Mascot size={124} variant="watering" />
+              <Text style={styles.emptyText}>No confirmed transactions yet.</Text>
+            </View>
+          ) : null}
+        </ScrollView>
       </Surface>
 
       <Surface>
-        <Pressable accessibilityRole="button" onPress={() => setDeeperOpen((open) => !open)} style={styles.deeperToggle}>
+        <View style={styles.deeperHeader}>
           <Ionicons color={colors.primaryDark} name="analytics-outline" size={21} />
           <View style={styles.grow}>
             <Text style={styles.transactionTitle}>Summaries</Text>
             <Text style={styles.meta}>Accounts and category totals</Text>
           </View>
-          <Ionicons color={colors.muted} name={deeperOpen ? "chevron-up" : "chevron-down"} size={18} />
-        </Pressable>
-        {deeperOpen ? (
-          <View style={styles.deeper}>
+        </View>
+        <View style={styles.deeper}>
             <View style={styles.summaryRow}>
               <View>
                 <Text style={styles.transactionTitle}>Net worth</Text>
@@ -283,8 +283,7 @@ export default function MoneyScreen() {
               </View>
             ))}
             {money?.summary.length === 0 ? <Text style={styles.emptyText}>Confirmed transactions will build summaries.</Text> : null}
-          </View>
-        ) : null}
+        </View>
       </Surface>
 
       <Modal animationType="slide" transparent visible={editingTransaction !== null} onRequestClose={resetTransaction}>
@@ -433,7 +432,7 @@ const styles = StyleSheet.create({
   confirm: { alignItems: "center", backgroundColor: colors.primary, borderRadius: radii.pill, height: 44, justifyContent: "center", width: 44 },
   emptyText: { color: colors.muted, fontSize: 14, padding: spacing.md },
   emptyMascot: { alignItems: "center", paddingTop: spacing.md },
-  deeperToggle: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 72, padding: spacing.md },
+  deeperHeader: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: 72, padding: spacing.md },
   deeper: { borderTopColor: colors.border, borderTopWidth: 1, gap: spacing.md, padding: spacing.md },
   summaryRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   smallIconButton: { alignItems: "center", height: 40, justifyContent: "center", width: 40 },
