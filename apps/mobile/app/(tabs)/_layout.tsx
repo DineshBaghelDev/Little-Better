@@ -1,22 +1,42 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useQuery } from "convex/react";
 import { router, Tabs } from "expo-router";
 import { Pressable } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { colors } from "../../src/theme";
+import { api } from "../../convex/_generated/api";
+import { colors, resolveAppearance } from "../../src/theme";
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const settings = useQuery(api.core.settingsView);
+  const appearance = resolveAppearance(settings?.settings);
+  const floating = appearance.navStyle === "floating";
+  const compact = appearance.navStyle === "compact";
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
+        tabBarHideOnKeyboard: true,
+        tabBarActiveTintColor: appearance.primaryDark,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle: {
           backgroundColor: colors.surface,
+          borderColor: colors.border,
+          borderRadius: floating ? 26 : 0,
           borderTopColor: colors.border,
-          height: 72,
-          paddingBottom: 8,
-          paddingTop: 8,
+          borderWidth: floating ? 1 : 0,
+          bottom: floating ? Math.max(insets.bottom, 12) : 0,
+          elevation: floating ? 6 : 0,
+          height: (compact ? 58 : 72) + (floating ? 0 : insets.bottom),
+          left: floating ? 18 : 0,
+          paddingBottom: floating ? (compact ? 4 : 8) : Math.max(insets.bottom, 4),
+          paddingTop: compact ? 4 : 8,
+          position: "absolute",
+          right: floating ? 18 : 0,
+          shadowColor: colors.text,
+          shadowOpacity: floating ? 0.08 : 0,
+          shadowRadius: 14,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       }}
@@ -50,7 +70,7 @@ export default function TabsLayout() {
               onPress={() => router.push("/quick-add")}
               style={{ alignItems: "center", flex: 1, justifyContent: "center" }}
             >
-              <Ionicons color={colors.primary} name="add-circle" size={42} />
+              <Ionicons color={appearance.primary} name="add-circle" size={compact ? 36 : 42} />
             </Pressable>
           ),
         }}

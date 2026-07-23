@@ -2,10 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "../convex/_generated/api";
-import { Mascot } from "../src/components/ui";
+import { Mascot, useAppearance } from "../src/components/ui";
 import { enqueueOffline, readLocalTimer, saveLocalTimer, type LocalTimer } from "../src/offlineQueue";
 import { colors, radii, spacing } from "../src/theme";
 
@@ -13,20 +14,24 @@ const SESSION_SECONDS = 30 * 60;
 const ringSegments = Array.from({ length: 12 }, (_, index) => index);
 
 export default function FocusScreen() {
+  const { height, width } = useWindowDimensions();
+  const compact = height < 700 || width < 360;
   const focus = useQuery(api.core.focusState);
+  const viewer = useQuery(api.core.viewer);
   const startFocus = useMutation(api.core.startFocus);
   const setPaused = useMutation(api.core.setFocusPaused);
   const endFocus = useMutation(api.core.endFocus);
   const addManualFocus = useMutation(api.core.addManualFocus);
   const [localTimer, setLocalTimer] = useState<LocalTimer | null>(null);
   const [now, setNow] = useState(Date.now());
+  const appearance = useAppearance();
 
   useEffect(() => {
-    readLocalTimer().then(setLocalTimer);
-  }, []);
+    if (viewer) readLocalTimer(viewer._id).then(setLocalTimer);
+  }, [viewer]);
 
   useEffect(() => {
-    if (focus?.activeTimer || localTimer) return;
+    if (!viewer || focus?.activeTimer || localTimer) return;
     startFocus({}).catch(async () => {
       const timer = {
         categoryName: focus?.focusCategory?.name ?? "Focus",
@@ -35,9 +40,9 @@ export default function FocusScreen() {
         status: "running" as const,
       };
       setLocalTimer(timer);
-      await saveLocalTimer(timer);
+      await saveLocalTimer(viewer._id, timer);
     });
-  }, [focus?.activeTimer, focus?.focusCategory?.name, localTimer, startFocus]);
+  }, [focus?.activeTimer, focus?.focusCategory?.name, localTimer, startFocus, viewer]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -55,7 +60,7 @@ export default function FocusScreen() {
   const seconds = (remaining % 60).toString().padStart(2, "0");
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top", "bottom", "left", "right"]} style={[styles.safeArea, compact && styles.safeAreaCompact]}>
       <View style={styles.header}>
         <Pressable accessibilityLabel="Close focus session" accessibilityRole="button" onPress={() => router.back()} style={styles.iconButton}>
           <Ionicons color={colors.text} name="close" size={24} />
@@ -65,18 +70,18 @@ export default function FocusScreen() {
         </View>
       </View>
 
-      <View style={styles.center}>
+      <View style={[styles.center, compact && styles.centerCompact]}>
         <Text style={styles.title}>{focus?.focusCategory?.name ?? localTimer?.categoryName ?? "Focus"}</Text>
         <Text style={styles.meta}>Focus session</Text>
-        <View accessibilityLabel={`${minutes} minutes ${seconds} seconds remaining`} style={styles.timerRing}>
+        <View accessibilityLabel={`${minutes} minutes ${seconds} seconds remaining`} style={[styles.timerRing, compact && styles.timerRingCompact]}>
           <View style={styles.segmentRing}>
             {ringSegments.map((segment) => (
               <View
                 key={segment}
                 style={[
                   styles.ringSegment,
-                  segment < completedSegments && styles.ringSegmentDone,
-                  { transform: [{ rotate: `${segment * 30}deg` }, { translateY: -100 }] },
+                  segment < completedSegments && [styles.ringSegmentDone, { backgroundColor: appearance.primary }],
+                  { transform: [{ rotate: `${segment * 30}deg` }, { translateY: compact ? -82 : -100 }] },
                 ]}
               />
             ))}
@@ -86,7 +91,7 @@ export default function FocusScreen() {
           </Text>
           <Text style={styles.timerMeta}>of 30:00</Text>
         </View>
-        <Mascot size={96} variant="focus" />
+        <Mascot size={compact ? 96 : 128} variant="focus" />
       </View>
 
       <View style={styles.controls}>
@@ -104,7 +109,7 @@ export default function FocusScreen() {
                   status: paused ? "running" as const : "paused" as const,
                 };
                 setLocalTimer(next);
-                await saveLocalTimer(next);
+                if (viewer) await saveLocalTimer(viewer._id, next);
               }
             }}
             style={styles.control}
@@ -123,10 +128,10 @@ export default function FocusScreen() {
                 try {
                   await addManualFocus({ minutes });
                 } catch {
-                  await enqueueOffline("addManualFocus", { minutes });
+                  if (viewer) await enqueueOffline(viewer._id, "addManualFocus", { minutes });
                 }
                 setLocalTimer(null);
-                await saveLocalTimer(null);
+                if (viewer) await saveLocalTimer(viewer._id, null);
               }
               router.back();
             }}
@@ -143,12 +148,15 @@ export default function FocusScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.lavenderSurface, flex: 1, padding: spacing.lg },
+  safeAreaCompact: { padding: spacing.md },
   header: { flexDirection: "row", justifyContent: "space-between" },
   iconButton: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
   center: { alignItems: "center", flex: 1, gap: spacing.sm, justifyContent: "center" },
+  centerCompact: { gap: spacing.xs },
   title: { color: colors.text, fontSize: 22, fontWeight: "700" },
   meta: { color: colors.muted, fontSize: 14 },
   timerRing: { alignItems: "center", backgroundColor: colors.surface, borderRadius: 130, height: 230, justifyContent: "center", marginVertical: spacing.xl, width: 230 },
+  timerRingCompact: { borderRadius: 100, height: 190, marginVertical: spacing.md, width: 190 },
   segmentRing: { alignItems: "center", bottom: 0, justifyContent: "center", left: 0, position: "absolute", right: 0, top: 0 },
   ringSegment: { backgroundColor: colors.border, borderRadius: radii.pill, height: 24, position: "absolute", width: 8 },
   ringSegmentDone: { backgroundColor: colors.primary },

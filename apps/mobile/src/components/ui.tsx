@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useConvexAuth, useQuery } from "convex/react";
 import { PropsWithChildren, ReactNode } from "react";
 import {
+  Image,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -9,7 +11,37 @@ import {
   ViewStyle,
 } from "react-native";
 
-import { colors, radii, spacing, typography } from "../theme";
+import { api } from "../../convex/_generated/api";
+import { colors, radii, resolveAppearance, spacing, typography } from "../theme";
+
+export function useAppearance() {
+  const { isAuthenticated } = useConvexAuth();
+  const settings = useQuery(api.core.settingsView, isAuthenticated ? {} : "skip");
+  return resolveAppearance(settings?.settings);
+}
+
+const mascotSheet = require("../../assets/sprout-spritesheet.png");
+const spritePositions = {
+  calm: [0, 0],
+  calendar: [2, 2],
+  celebrating: [1, 1],
+  complete: [1, 1],
+  excited: [1, 0],
+  focus: [2, 0],
+  money: [1, 2],
+  planning: [2, 2],
+  pointing: [0, 1],
+  proud: [3, 0],
+  reflection: [3, 2],
+  relaxed: [3, 1],
+  sleepy: [0, 2],
+  watering: [0, 1],
+  working: [2, 1],
+} as const;
+const spriteFrameSize = 512;
+const spriteColumns = 4;
+const spriteRows = 3;
+type MascotVariant = keyof typeof spritePositions;
 
 export function Surface({
   children,
@@ -27,12 +59,14 @@ export function PrimaryButton({
   onPress: () => void;
   secondary?: boolean;
 }) {
+  const appearance = useAppearance();
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
+        { backgroundColor: appearance.primary, borderColor: appearance.primary },
         secondary && styles.buttonSecondary,
         pressed && styles.pressed,
       ]}
@@ -40,6 +74,28 @@ export function PrimaryButton({
       <Text style={[styles.buttonText, secondary && styles.buttonTextSecondary]}>
         {label}
       </Text>
+    </Pressable>
+  );
+}
+
+export function Chip({
+  label,
+  onPress,
+  selected,
+}: {
+  label: string;
+  onPress: () => void;
+  selected: boolean;
+}) {
+  const appearance = useAppearance();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={[styles.chip, selected && { backgroundColor: appearance.primary, borderColor: appearance.primary }]}
+    >
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
     </Pressable>
   );
 }
@@ -90,39 +146,27 @@ export function Mascot({
   variant = "calm",
 }: {
   size?: number;
-  variant?: "calm" | "complete" | "focus" | "pointing" | "reflection";
+  variant?: MascotVariant | string;
 }) {
-  const eyesClosed = variant === "focus" || variant === "complete";
-  const pointing = variant === "pointing";
+  const [column, row] = spritePositions[variant as MascotVariant] ?? spritePositions.calm;
+  const scale = size / spriteFrameSize;
   return (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no"
       style={[styles.mascot, { height: size, width: size }]}
     >
-      <View style={[styles.leaf, styles.leafLeft, { height: size * 0.2, width: size * 0.13 }]} />
-      <View style={[styles.leaf, styles.leafRight, { height: size * 0.2, width: size * 0.13 }]} />
-      <View style={[styles.stem, { height: size * 0.16, width: Math.max(2, size * 0.035) }]} />
-      <View style={[styles.body, { borderRadius: size * 0.26, height: size * 0.64, width: size * 0.58 }]}>
-        <View style={[styles.arm, styles.armLeft, { height: size * 0.22, width: size * 0.11 }]} />
-        <View style={[styles.arm, pointing ? styles.armPointing : styles.armRight, { height: size * 0.22, width: size * 0.11 }]} />
-        <View style={styles.face}>
-          {eyesClosed ? (
-            <>
-              <View style={styles.closedEye} />
-              <View style={styles.closedEye} />
-            </>
-          ) : (
-            <>
-              <View style={styles.eye} />
-              <View style={styles.eye} />
-            </>
-          )}
-        </View>
-        <View style={[styles.mouth, variant === "reflection" && styles.softMouth]} />
-      </View>
-      <View style={[styles.foot, styles.footLeft, { height: size * 0.09, width: size * 0.16 }]} />
-      <View style={[styles.foot, styles.footRight, { height: size * 0.09, width: size * 0.16 }]} />
+      <Image
+        source={mascotSheet}
+        style={{
+          height: spriteFrameSize * spriteRows * scale,
+          transform: [
+            { translateX: -column * spriteFrameSize * scale },
+            { translateY: -row * spriteFrameSize * scale },
+          ],
+          width: spriteFrameSize * spriteColumns * scale,
+        }}
+      />
     </View>
   );
 }
@@ -148,6 +192,9 @@ const styles = StyleSheet.create({
   buttonSecondary: { backgroundColor: colors.surface, borderColor: colors.border },
   buttonText: { color: colors.surface, ...typography.cardTitle },
   buttonTextSecondary: { color: colors.text },
+  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
+  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
+  chipTextSelected: { color: colors.surface },
   pressed: { opacity: 0.72 },
   row: {
     alignItems: "center",
@@ -166,22 +213,5 @@ const styles = StyleSheet.create({
   rowTitle: { color: colors.text, fontSize: 15, fontWeight: "600" },
   rowDetail: { color: colors.muted, ...typography.secondary, marginTop: 3 },
   sectionLabel: { color: colors.text, ...typography.cardTitle },
-  mascot: { alignItems: "center", justifyContent: "flex-end" },
-  stem: { backgroundColor: colors.primaryDark, borderRadius: radii.pill, position: "absolute", top: "7%" },
-  leaf: { backgroundColor: colors.primary, borderRadius: radii.pill, position: "absolute", top: "0%" },
-  leafLeft: { transform: [{ rotate: "-36deg" }], left: "37%" },
-  leafRight: { transform: [{ rotate: "36deg" }], right: "37%" },
-  body: { alignItems: "center", backgroundColor: colors.primary, justifyContent: "center", marginBottom: "10%" },
-  arm: { backgroundColor: colors.primary, borderRadius: radii.pill, position: "absolute", top: "45%" },
-  armLeft: { left: "-12%", transform: [{ rotate: "18deg" }] },
-  armRight: { right: "-12%", transform: [{ rotate: "-18deg" }] },
-  armPointing: { right: "-18%", top: "32%", transform: [{ rotate: "-70deg" }] },
-  face: { flexDirection: "row", gap: 10, marginTop: 4 },
-  eye: { backgroundColor: colors.text, borderRadius: radii.pill, height: 5, width: 5 },
-  closedEye: { backgroundColor: colors.text, borderRadius: radii.pill, height: 2, marginTop: 2, width: 9 },
-  mouth: { borderBottomColor: colors.text, borderBottomWidth: 2, borderRadius: 12, height: 9, marginTop: 8, width: 18 },
-  softMouth: { width: 14 },
-  foot: { backgroundColor: colors.primaryDark, borderRadius: radii.pill, bottom: 0, position: "absolute" },
-  footLeft: { left: "31%" },
-  footRight: { right: "31%" },
+  mascot: { overflow: "hidden" },
 });

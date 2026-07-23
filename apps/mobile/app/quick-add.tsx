@@ -3,15 +3,17 @@ import { useMutation, useQuery } from "convex/react";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
+import { parseCapture, type ExtractedAction } from "../src/captureParser";
 import { CategoryDropdown } from "../src/components/CategoryDropdown";
 import { DatePickerField, dateInput } from "../src/components/DatePickerField";
-import { PrimaryButton, Surface } from "../src/components/ui";
+import { Chip, Mascot, PrimaryButton, Surface, useAppearance } from "../src/components/ui";
 import { enqueueOffline } from "../src/offlineQueue";
+import { paymentNotifications, paymentNotificationsSupported, type PaymentNotification } from "../src/paymentNotifications";
 import { colors, radii, spacing } from "../src/theme";
 
 const types = [
@@ -23,75 +25,6 @@ const types = [
   ["Voice", "Confirm captured words", "mic-outline", colors.coralSurface],
 ] as const;
 
-type ExtractedAction =
-  | { amount: string; category: string; merchant: string; type: "expense"; warnings: string[] }
-  | { minutes: string; note: string; type: "focus"; warnings: string[] }
-  | { reminderLeadMinutes: string; scheduledAt: string; title: string; type: "task"; warnings: string[] }
-  | { exceptText: string; scheduledAt: string; type: "move"; warnings: string[] };
-
-function tomorrowDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  return date;
-}
-
-function dateAt(value: Date, hour: number, minute = 0) {
-  const date = new Date(value);
-  date.setHours(hour, minute, 0, 0);
-  return date.getTime();
-}
-
-function parseHour(text: string) {
-  const match = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-  if (!match) return null;
-  let hour = Number(match[1]);
-  const minute = Number(match[2] ?? 0);
-  const suffix = match[3]?.toLowerCase();
-  if (suffix === "pm" && hour < 12) hour += 12;
-  if (suffix === "am" && hour === 12) hour = 0;
-  return { hour: Math.max(0, Math.min(23, hour)), minute: Math.max(0, Math.min(59, minute)) };
-}
-
-function parseCapture(text: string): ExtractedAction[] {
-  const lower = text.toLowerCase();
-  const actions: ExtractedAction[] = [];
-  const amount = lower.match(/(?:spent|paid|rs|inr)\s*(?:rs|inr)?\s*(\d+)/i);
-  if (amount) {
-    const category = lower.match(/(?:on|for)\s+([a-z ]+?)(?:\.|,|$| and )/i)?.[1]?.trim() || "General";
-    actions.push({ amount: amount[1], category, merchant: "", type: "expense", warnings: category === "General" ? ["Category ambiguous"] : [] });
-  }
-
-  const studied = lower.match(/(?:studied|focused|worked on)\s+(.+?)\s+for\s+(\d+)\s*(minutes|minute|min|hours|hour)/i);
-  if (studied) {
-    const units = studied[3].startsWith("hour") ? 60 : 1;
-    actions.push({ minutes: String(Number(studied[2]) * units), note: studied[1], type: "focus", warnings: [] });
-  }
-
-  if (lower.includes("move unfinished tasks")) {
-    const exceptText = lower.match(/except\s+(.+?)(?:\.|$)/)?.[1]?.trim() || "";
-    actions.push({ exceptText, scheduledAt: String(dateAt(tomorrowDate(), 9)), type: "move", warnings: exceptText ? [] : ["Exception ambiguous"] });
-  }
-
-  if (lower.startsWith("add ") || lower.includes(" tomorrow ")) {
-    const title = text
-      .replace(/add\s+/i, "")
-      .replace(/tomorrow.*$/i, "")
-      .replace(/and remind.*$/i, "")
-      .trim();
-    const parsedTime = parseHour(lower.match(/at\s+([^,\.]+?)(?:\s+and|$)/)?.[1] ?? "");
-    const lead = lower.match(/remind me\s+(\d+)\s*(minutes|minute|min|hours|hour)/i);
-    if (title) actions.push({
-      reminderLeadMinutes: lead ? String(Number(lead[1]) * (lead[2].startsWith("hour") ? 60 : 1)) : "",
-      scheduledAt: String(dateAt(tomorrowDate(), parsedTime?.hour ?? 9, parsedTime?.minute ?? 0)),
-      title,
-      type: "task",
-      warnings: parsedTime ? [] : ["Time ambiguous"],
-    });
-  }
-
-  return actions.length ? actions : [{ reminderLeadMinutes: "", scheduledAt: "", title: text.trim(), type: "task", warnings: ["Could not infer date or type"] }];
-}
-
 export default function QuickAddModal() {
   const ensureMoneyDefaults = useMutation(api.core.ensureMoneyDefaults);
   const addTask = useMutation(api.core.addTask);
@@ -102,6 +35,8 @@ export default function QuickAddModal() {
   const moveUnfinishedTasks = useMutation(api.core.moveUnfinishedTasks);
   const startFocus = useMutation(api.core.startFocus);
   const money = useQuery(api.core.money, {});
+  const viewer = useQuery(api.core.viewer);
+  const appearance = useAppearance();
   const [selected, setSelected] = useState<string | null>(null);
   const [expense, setExpense] = useState({
     accountId: undefined as Id<"accounts"> | undefined,
@@ -120,6 +55,9 @@ export default function QuickAddModal() {
   const [recognizing, setRecognizing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [voiceMessage, setVoiceMessage] = useState("");
+  const [notificationAccess, setNotificationAccess] = useState(false);
+  const [paymentAlerts, setPaymentAlerts] = useState<PaymentNotification[]>([]);
+  const [selectedAlertKey, setSelectedAlertKey] = useState<string | null>(null);
 
   useSpeechRecognitionEvent("start", () => {
     setRecognizing(true);
@@ -127,9 +65,10 @@ export default function QuickAddModal() {
   });
   useSpeechRecognitionEvent("end", () => setRecognizing(false));
   useSpeechRecognitionEvent("result", (event) => {
-    const transcript = event.results[0]?.transcript ?? "";
+    const transcript = event.results[0]?.transcript?.trim() ?? "";
     setValue(transcript);
     setExtracted(parseCapture(transcript));
+    if (event.isFinal) setVoiceMessage(`${parseCapture(transcript).length} item${parseCapture(transcript).length === 1 ? "" : "s"} ready`);
   });
   useSpeechRecognitionEvent("error", (event) => {
     setRecognizing(false);
@@ -139,6 +78,33 @@ export default function QuickAddModal() {
   useEffect(() => {
     void ensureMoneyDefaults({});
   }, [ensureMoneyDefaults]);
+
+  useEffect(() => {
+    if (selected !== "Payment alert" || !viewer || !paymentNotificationsSupported || !paymentNotifications) return;
+    const module = paymentNotifications;
+    const ownerId = viewer._id;
+    let active = true;
+    async function refresh() {
+      const allowed = await module.isAccessEnabled();
+      const alerts = allowed ? await module.getPending(ownerId) : [];
+      if (!active) return;
+      setNotificationAccess(allowed);
+      setPaymentAlerts(alerts);
+      if (alerts[0]) setValue((current) => {
+        if (current) return current;
+        setSelectedAlertKey(alerts[0].key);
+        return alerts[0].text;
+      });
+    }
+    void refresh();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void refresh();
+    });
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [selected, viewer]);
 
   function expenseDate() {
     const [year, month, day] = expense.date.split("-").map(Number);
@@ -150,7 +116,8 @@ export default function QuickAddModal() {
       await saveNow(payload);
       return false;
     } catch {
-      await enqueueOffline(type, payload);
+      if (!viewer) return false;
+      await enqueueOffline(viewer._id, type, payload);
       setSyncMessage("Saved offline. It will sync when the app reconnects.");
       return true;
     }
@@ -168,7 +135,9 @@ export default function QuickAddModal() {
       return;
     }
     ExpoSpeechRecognitionModule.start({
+      addsPunctuation: true,
       continuous: false,
+      contextualStrings: ["expense", "rupees", "focus", "minutes", "tomorrow", "remind me"],
       interimResults: true,
       lang: "en-US",
     });
@@ -211,6 +180,7 @@ export default function QuickAddModal() {
     } else if (selected === "Payment alert") {
       if (!text) return;
       await detectPaymentNotification({ text });
+      if (selectedAlertKey && paymentNotifications) await paymentNotifications.dismiss(selectedAlertKey);
     } else if (selected === "Note" || selected === "Voice") {
       if (!extracted.length) return;
       for (const action of extracted) {
@@ -256,15 +226,17 @@ export default function QuickAddModal() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.overlay}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.overlay}>
       <Pressable accessibilityLabel="Close quick add" onPress={() => router.back()} style={styles.scrim} />
       <SafeAreaView edges={["bottom"]} style={styles.sheet}>
+        <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={styles.sheetContent} keyboardShouldPersistTaps="handled">
         <View style={styles.handle} />
         <View style={styles.headingRow}>
-          <View>
+          <View style={styles.headingCopy}>
             <Text style={styles.title}>What would you like to add?</Text>
             <Text style={styles.subtitle}>Captured items update Today.</Text>
           </View>
+          <Mascot size={84} variant="excited" />
           <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={() => router.back()} style={styles.close}>
             <Ionicons color={colors.text} name="close" size={22} />
           </Pressable>
@@ -272,7 +244,7 @@ export default function QuickAddModal() {
 
         {selected ? (
           <View style={styles.confirmation}>
-            <Text style={styles.selectedLabel}>{selected}</Text>
+            <Text style={[styles.selectedLabel, { color: appearance.primaryDark }]}>{selected}</Text>
             {selected === "Expense" ? (
               <>
                 <View style={styles.chips}>
@@ -381,12 +353,41 @@ export default function QuickAddModal() {
               </View>
             ) : selected === "Payment alert" ? (
               <>
+                {paymentNotificationsSupported && !notificationAccess ? (
+                  <Pressable accessibilityRole="button" onPress={() => paymentNotifications?.openSettings()} style={[styles.voiceButton, { backgroundColor: appearance.primary }]}>
+                    <Ionicons color={colors.surface} name="notifications-outline" size={22} />
+                    <Text style={styles.voiceButtonText}>Enable payment detection</Text>
+                  </Pressable>
+                ) : null}
+                {paymentAlerts.length ? (
+                  <Surface>
+                    {paymentAlerts.slice(0, 3).map((alert) => (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: selectedAlertKey === alert.key }}
+                        key={alert.key}
+                        onPress={() => {
+                          setSelectedAlertKey(alert.key);
+                          setValue(alert.text);
+                        }}
+                        style={[styles.alertRow, selectedAlertKey === alert.key && { backgroundColor: appearance.surface }]}
+                      >
+                        <Ionicons color={appearance.primaryDark} name="receipt-outline" size={20} />
+                        <View style={styles.grow}>
+                          <Text numberOfLines={2} style={styles.alertText}>{alert.text}</Text>
+                          <Text style={styles.typeDetail}>{new Date(alert.postedAt).toLocaleString()}</Text>
+                        </View>
+                        {selectedAlertKey === alert.key ? <Ionicons color={appearance.primaryDark} name="checkmark-circle" size={20} /> : null}
+                      </Pressable>
+                    ))}
+                  </Surface>
+                ) : null}
                 <TextInput
                   accessibilityLabel="Payment notification text"
                   autoFocus
                   multiline
                   onChangeText={setValue}
-                  placeholder="Paste a UPI or payment notification"
+                  placeholder={paymentNotificationsSupported ? "Payment notification" : "Paste a UPI or payment notification"}
                   placeholderTextColor={colors.muted}
                   style={[styles.input, styles.captureInput]}
                   value={value}
@@ -396,7 +397,7 @@ export default function QuickAddModal() {
             ) : (
               <>
                 {selected === "Voice" ? (
-                  <Pressable accessibilityRole="button" onPress={recognizing ? () => ExpoSpeechRecognitionModule.stop() : startVoiceCapture} style={styles.voiceButton}>
+                  <Pressable accessibilityRole="button" onPress={recognizing ? () => ExpoSpeechRecognitionModule.stop() : startVoiceCapture} style={[styles.voiceButton, { backgroundColor: appearance.primary }]}>
                     <Ionicons color={colors.surface} name={recognizing ? "stop" : "mic"} size={22} />
                     <Text style={styles.voiceButtonText}>{recognizing ? "Stop listening" : "Start voice capture"}</Text>
                   </Pressable>
@@ -445,7 +446,7 @@ export default function QuickAddModal() {
             <PrimaryButton label={selected === "Note" || selected === "Voice" ? "Confirm all" : selected === "Payment alert" ? "Detect payment" : selected === "Focus" || selected === "Expense" || selected === "Task" || value.trim() ? `Save ${selected.toLowerCase()}` : "Add details"} onPress={save} />
             {syncMessage ? <Text style={styles.syncText}>{syncMessage}</Text> : null}
             <Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={styles.changeType}>
-              <Text style={styles.changeTypeText}>Choose another type</Text>
+              <Text style={[styles.changeTypeText, { color: appearance.primaryDark }]}>Choose another type</Text>
             </Pressable>
           </View>
         ) : (
@@ -464,6 +465,7 @@ export default function QuickAddModal() {
             ))}
           </Surface>
         )}
+        </ScrollView>
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -472,9 +474,11 @@ export default function QuickAddModal() {
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end" },
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(47,58,51,0.42)" },
-  sheet: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg },
+  sheet: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "92%" },
+  sheetContent: { padding: spacing.lg },
   handle: { alignSelf: "center", backgroundColor: colors.border, borderRadius: radii.pill, height: 4, marginBottom: spacing.lg, width: 48 },
   headingRow: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.lg },
+  headingCopy: { flex: 1 },
   title: { color: colors.text, fontSize: 20, fontWeight: "700" },
   subtitle: { color: colors.muted, fontSize: 13, marginTop: spacing.xs },
   close: { alignItems: "center", height: 44, justifyContent: "center", width: 44 },
@@ -498,16 +502,6 @@ const styles = StyleSheet.create({
   voiceButtonText: { color: colors.surface, fontSize: 15, fontWeight: "700" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   inline: { flexDirection: "row", gap: spacing.sm },
-  chip: { alignItems: "center", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, minHeight: 44, paddingHorizontal: spacing.md, justifyContent: "center" },
-  chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { color: colors.text, fontSize: 13, fontWeight: "600" },
-  chipTextSelected: { color: colors.surface },
+  alertRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", gap: spacing.sm, minHeight: 64, padding: spacing.md },
+  alertText: { color: colors.text, fontSize: 13, lineHeight: 18 },
 });
-
-function Chip({ label, onPress, selected }: { label: string; onPress: () => void; selected: boolean }) {
-  return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.chip, selected && styles.chipSelected]}>
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
-    </Pressable>
-  );
-}

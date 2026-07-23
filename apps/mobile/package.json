@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@auth/core": "^0.37.4",
+    "@convex-dev/auth": "^0.0.90",
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "convex": "^1.42.3",
@@ -10,8 +12,11 @@
     "expo-linking": "^57.0.3",
     "expo-notifications": "~57.0.6",
     "expo-router": "^57.0.7",
+    "expo-secure-store": "~57.0.1",
     "expo-speech-recognition": "^56.0.1",
+    "expo-splash-screen": "~57.0.4",
     "expo-status-bar": "~57.0.1",
+    "jose": "^6.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
@@ -31,7 +36,8 @@
     "web": "expo start --web",
     "convex:dev": "convex dev",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:capture": "node --experimental-strip-types src/captureParser.test.mjs"
   },
   "private": true
 }

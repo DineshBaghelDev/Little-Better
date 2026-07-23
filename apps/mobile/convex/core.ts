@@ -1,6 +1,7 @@
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -12,6 +13,9 @@ const targetType = v.union(
   v.literal("minutes_per_week"),
   v.literal("binary_days"),
 );
+const colorScheme = v.union(v.literal("sage"), v.literal("teal"), v.literal("lavender"), v.literal("coral"), v.literal("mustard"));
+const backgroundPattern = v.union(v.literal("none"), v.literal("sprouts"), v.literal("dots"), v.literal("stars"));
+const navStyle = v.union(v.literal("floating"), v.literal("classic"), v.literal("compact"));
 
 const focusCategory = v.object({
   _id: v.id("focusCategories"),
@@ -20,6 +24,7 @@ const focusCategory = v.object({
   preferredHour: v.optional(v.number()),
   targetType,
   targetValue: v.optional(v.number()),
+  userId: v.optional(v.id("users")),
 });
 
 const task = v.object({
@@ -33,6 +38,7 @@ const task = v.object({
   scheduledAt: v.optional(v.number()),
   status: v.union(v.literal("planned"), v.literal("done")),
   title: v.string(),
+  userId: v.optional(v.id("users")),
 });
 
 const transaction = v.object({
@@ -51,6 +57,7 @@ const transaction = v.object({
   source: v.optional(v.union(v.literal("manual"), v.literal("text"), v.literal("notification"), v.literal("import"))),
   status: v.union(v.literal("pending"), v.literal("confirmed"), v.literal("ignored")),
   type: v.optional(v.union(v.literal("expense"), v.literal("income"))),
+  userId: v.optional(v.id("users")),
 });
 
 const account = v.object({
@@ -60,6 +67,7 @@ const account = v.object({
   balance: v.number(),
   baseBalance: v.number(),
   name: v.string(),
+  userId: v.optional(v.id("users")),
 });
 
 const transactionCategory = v.object({
@@ -67,6 +75,7 @@ const transactionCategory = v.object({
   _creationTime: v.number(),
   name: v.string(),
   type: v.union(v.literal("expense"), v.literal("income")),
+  userId: v.optional(v.id("users")),
 });
 
 const activeTimer = v.object({
@@ -76,16 +85,21 @@ const activeTimer = v.object({
   elapsedSeconds: v.number(),
   startedAt: v.number(),
   status: v.union(v.literal("running"), v.literal("paused")),
+  userId: v.optional(v.id("users")),
 });
 
 const settings = v.object({
   _id: v.id("appSettings"),
   _creationTime: v.number(),
+  backgroundPattern: v.optional(backgroundPattern),
+  colorScheme: v.optional(colorScheme),
   focusCategoryId: v.id("focusCategories"),
   monthlyBudget: v.number(),
+  navStyle: v.optional(navStyle),
   notificationsEnabled: v.optional(v.boolean()),
   onboardedAt: v.number(),
   reflectionHour: v.number(),
+  userId: v.optional(v.id("users")),
 });
 
 const weeklyInsightStatus = v.union(v.literal("new"), v.literal("applied"), v.literal("dismissed"));
@@ -102,6 +116,7 @@ const weeklyInsight = v.object({
   previousHour: v.optional(v.number()),
   status: weeklyInsightStatus,
   suggestedAction: v.string(),
+  userId: v.optional(v.id("users")),
 });
 
 const weeklyInsightPreview = v.object({
@@ -267,31 +282,74 @@ function detectionKey(amount: number, merchant: string, occurredAt: number) {
   return `${Math.round(amount)}:${merchant.trim().toLowerCase() || "unknown"}:${bucket}`;
 }
 
-async function firstActiveTimer(ctx: QueryCtx | MutationCtx) {
+type OwnedTable =
+  | "accounts"
+  | "activeTimers"
+  | "appSettings"
+  | "focusCategories"
+  | "tasks"
+  | "transactionCategories"
+  | "transactions"
+  | "weeklyInsights";
+
+async function requireUserId(ctx: QueryCtx | MutationCtx) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) throw new Error("Authentication required.");
+  return userId;
+}
+
+async function requireOwned<Table extends OwnedTable>(
+  ctx: QueryCtx | MutationCtx,
+  table: Table,
+  id: Id<Table>,
+  userId: Id<"users">,
+) {
+  const document = await ctx.db.get(table, id);
+  if (!document || document.userId !== userId) throw new Error("Record not found.");
+  return document;
+}
+
+async function firstSettings(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
+  return await ctx.db.query("appSettings").withIndex("by_user", (q) => q.eq("userId", userId)).first();
+}
+
+async function firstActiveTimer(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
   return (
     (await ctx.db
       .query("activeTimers")
-      .withIndex("by_status", (q) => q.eq("status", "running"))
+      .withIndex("by_user_and_status", (q) => q.eq("userId", userId).eq("status", "running"))
       .order("desc")
       .first()) ??
     (await ctx.db
       .query("activeTimers")
-      .withIndex("by_status", (q) => q.eq("status", "paused"))
+      .withIndex("by_user_and_status", (q) => q.eq("userId", userId).eq("status", "paused"))
       .order("desc")
       .first())
   );
 }
 
-async function firstAccount(ctx: QueryCtx | MutationCtx) {
-  return (await ctx.db.query("accounts").take(1))[0] ?? null;
+async function firstAccount(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
+  return await ctx.db.query("accounts").withIndex("by_user", (q) => q.eq("userId", userId)).first();
 }
+
+export const viewer = query({
+  args: {},
+  returns: v.object({ _id: v.id("users"), name: v.string() }),
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const user = await ctx.db.get("users", userId);
+    if (!user?.name) throw new Error("Account profile is missing.");
+    return { _id: userId, name: user.name };
+  },
+});
 
 export const onboardingStatus = query({
   args: {},
   returns: v.object({ onboarded: v.boolean() }),
-  handler: async (ctx) => ({
-    onboarded: (await ctx.db.query("appSettings").order("desc").first()) !== null,
-  }),
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    return { onboarded: (await firstSettings(ctx, userId)) !== null };
+  },
 });
 
 export const bootstrap = mutation({
@@ -306,7 +364,8 @@ export const bootstrap = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (await ctx.db.query("appSettings").order("desc").first()) return null;
+    const userId = await requireUserId(ctx);
+    if (await firstSettings(ctx, userId)) return null;
 
     const now = Date.now();
     const categoryId = await ctx.db.insert("focusCategories", {
@@ -314,18 +373,24 @@ export const bootstrap = mutation({
       preferredHour: Math.max(0, Math.min(23, Math.round(args.preferredHour))),
       targetType: args.targetType,
       targetValue: Math.max(1, Math.min(1000, Math.round(args.targetValue))),
+      userId,
     });
     await ctx.db.insert("appSettings", {
+      backgroundPattern: "sprouts",
+      colorScheme: "sage",
       focusCategoryId: categoryId,
       monthlyBudget: Math.max(0, args.monthlyBudget),
+      navStyle: "floating",
       notificationsEnabled: args.notificationsEnabled,
       onboardedAt: now,
       reflectionHour: Math.max(17, Math.min(23, Math.round(args.reflectionHour))),
+      userId,
     });
     await ctx.db.insert("tasks", {
       title: "Plan tomorrow's first task",
       scheduledAt: now + MS_PER_HOUR,
       status: "planned",
+      userId,
     });
     return null;
   },
@@ -353,41 +418,42 @@ export const today = query({
     settings: v.union(settings, v.null()),
   }),
   handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
     const now = Date.now();
     const dayStart = startOfDay(now);
     const dayEnd = dayStart + DAY_MS;
     const weekStart = startOfWeek(now);
-    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
-    const focus = settingsDoc ? await ctx.db.get(settingsDoc.focusCategoryId) : null;
+    const settingsDoc = await firstSettings(ctx, userId);
+    const focus = settingsDoc ? await requireOwned(ctx, "focusCategories", settingsDoc.focusCategoryId, userId) : null;
     const overdueTasks = await ctx.db
       .query("tasks")
-      .withIndex("by_status_and_scheduledAt", (q) =>
-        q.eq("status", "planned").lt("scheduledAt", now),
+      .withIndex("by_user_status_and_scheduledAt", (q) =>
+        q.eq("userId", userId).eq("status", "planned").lt("scheduledAt", now),
       )
       .order("desc")
       .take(20);
     const todayTasks = await ctx.db
       .query("tasks")
-      .withIndex("by_status_and_scheduledAt", (q) =>
-        q.eq("status", "planned").gte("scheduledAt", now).lt("scheduledAt", dayEnd),
+      .withIndex("by_user_status_and_scheduledAt", (q) =>
+        q.eq("userId", userId).eq("status", "planned").gte("scheduledAt", now).lt("scheduledAt", dayEnd),
       )
       .take(50);
     const pendingTransactions = await ctx.db
       .query("transactions")
-      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .withIndex("by_user_and_status", (q) => q.eq("userId", userId).eq("status", "pending"))
       .order("desc")
       .take(3);
-    const [lastReflection] = await ctx.db.query("reflections").order("desc").take(1);
+    const [lastReflection] = await ctx.db.query("reflections").withIndex("by_user_and_reflectedAt", (q) => q.eq("userId", userId)).order("desc").take(1);
     const dismissal = await ctx.db
       .query("reflectionDismissals")
-      .withIndex("by_dateKey", (q) => q.eq("dateKey", localDateKey(now)))
+      .withIndex("by_user_and_dateKey", (q) => q.eq("userId", userId).eq("dateKey", localDateKey(now)))
       .order("desc")
       .first();
     const focusSessions = focus
       ? await ctx.db
           .query("focusSessions")
-          .withIndex("by_category_and_completedAt", (q) =>
-            q.eq("categoryId", focus._id).gte("completedAt", weekStart).lte("completedAt", now),
+          .withIndex("by_user_category_and_completedAt", (q) =>
+            q.eq("userId", userId).eq("categoryId", focus._id).gte("completedAt", weekStart).lte("completedAt", now),
           )
           .take(200)
       : [];
@@ -398,15 +464,15 @@ export const today = query({
     monthEnd.setMonth(monthEnd.getMonth() + 1);
     const confirmedThisMonth = await ctx.db
       .query("transactions")
-      .withIndex("by_status_and_occurredAt", (q) =>
-        q.eq("status", "confirmed").gte("occurredAt", monthStart.getTime()).lt("occurredAt", monthEnd.getTime()),
+      .withIndex("by_user_status_and_occurredAt", (q) =>
+        q.eq("userId", userId).eq("status", "confirmed").gte("occurredAt", monthStart.getTime()).lt("occurredAt", monthEnd.getTime()),
       )
       .take(200);
     const spent = confirmedThisMonth.reduce(
       (total, item) => total + ((item.type ?? "expense") === "expense" ? item.amount : 0),
       0,
     );
-    const timer = await firstActiveTimer(ctx);
+    const timer = await firstActiveTimer(ctx, userId);
     const progress = focus ? focusProgressLabel(focus, focusSessions, now) : { complete: true, label: "" };
     const rankedItems: Array<
       | { kind: "timer"; rank: number; reason: string; timer: NonNullable<typeof timer> }
@@ -471,10 +537,11 @@ export const settingsView = query({
     settings: v.union(settings, v.null()),
   }),
   handler: async (ctx) => {
-    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    const userId = await requireUserId(ctx);
+    const settingsDoc = await firstSettings(ctx, userId);
     return {
-      focusCategories: await ctx.db.query("focusCategories").take(50),
-      focusCategory: settingsDoc ? await ctx.db.get(settingsDoc.focusCategoryId) : null,
+      focusCategories: await ctx.db.query("focusCategories").withIndex("by_user", (q) => q.eq("userId", userId)).take(50),
+      focusCategory: settingsDoc ? await requireOwned(ctx, "focusCategories", settingsDoc.focusCategoryId, userId) : null,
       settings: settingsDoc,
     };
   },
@@ -482,8 +549,11 @@ export const settingsView = query({
 
 export const updateSettings = mutation({
   args: {
+    backgroundPattern: v.optional(backgroundPattern),
+    colorScheme: v.optional(colorScheme),
     focusName: v.string(),
     monthlyBudget: v.number(),
+    navStyle: v.optional(navStyle),
     notificationsEnabled: v.optional(v.boolean()),
     preferredHour: v.number(),
     reflectionHour: v.number(),
@@ -492,9 +562,10 @@ export const updateSettings = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    const userId = await requireUserId(ctx);
+    const settingsDoc = await firstSettings(ctx, userId);
     if (!settingsDoc) return null;
-    const currentFocus = await ctx.db.get(settingsDoc.focusCategoryId);
+    const currentFocus = await requireOwned(ctx, "focusCategories", settingsDoc.focusCategoryId, userId);
     const focusName = args.focusName.trim() || currentFocus?.name || "Focus";
     const preferredHour = Math.max(0, Math.min(23, Math.round(args.preferredHour)));
     const targetValue = Math.max(1, Math.min(1000, Math.round(args.targetValue)));
@@ -506,6 +577,7 @@ export const updateSettings = mutation({
         preferredHour,
         targetType: args.targetType,
         targetValue,
+        userId,
       });
     } else {
       await ctx.db.patch(currentFocus._id, {
@@ -516,8 +588,11 @@ export const updateSettings = mutation({
     }
 
     await ctx.db.patch(settingsDoc._id, {
+      backgroundPattern: args.backgroundPattern,
+      colorScheme: args.colorScheme,
       focusCategoryId,
       monthlyBudget: Math.max(0, Math.round(args.monthlyBudget)),
+      navStyle: args.navStyle,
       notificationsEnabled: args.notificationsEnabled,
       reflectionHour: Math.max(17, Math.min(23, Math.round(args.reflectionHour))),
     });
@@ -529,6 +604,8 @@ export const completeTask = mutation({
   args: { taskId: v.id("tasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwned(ctx, "tasks", args.taskId, userId);
     await ctx.db.patch(args.taskId, { completedAt: Date.now(), status: "done" });
     return null;
   },
@@ -538,7 +615,20 @@ export const undoCompleteTask = mutation({
   args: { taskId: v.id("tasks") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwned(ctx, "tasks", args.taskId, userId);
     await ctx.db.patch(args.taskId, { completedAt: undefined, status: "planned" });
+    return null;
+  },
+});
+
+export const removeTask = mutation({
+  args: { taskId: v.id("tasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwned(ctx, "tasks", args.taskId, userId);
+    await ctx.db.delete(args.taskId);
     return null;
   },
 });
@@ -546,63 +636,71 @@ export const undoCompleteTask = mutation({
 export const insights = query({
   args: { from: v.number(), to: v.number() },
   returns: v.object({
+    activeDays: v.number(),
     appliedInsight: v.union(weeklyInsight, v.null()),
+    avgSessionMinutes: v.number(),
+    avgSpendPerDay: v.number(),
     categorySummary: v.array(v.object({ amount: v.number(), category: v.string() })),
     completedTasks: v.number(),
     currentInsight: v.union(weeklyInsightPreview, v.null()),
     focusCategoryName: v.string(),
     focusMinutes: v.number(),
     focusSessions: v.number(),
+    income: v.number(),
     insightRequirement: v.union(v.string(), v.null()),
+    net: v.number(),
     reflectionSummary: v.array(v.object({ count: v.number(), tag: v.string() })),
     spent: v.number(),
+    trend: v.array(v.object({ bucketMs: v.number(), minutes: v.number(), sessions: v.number(), spent: v.number(), start: v.number() })),
   }),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     const from = Math.max(0, Math.min(args.from, args.to));
     const to = Math.min(Math.max(args.from, args.to), from + 366 * 24 * MS_PER_HOUR);
-    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
-    const focus = settingsDoc ? await ctx.db.get(settingsDoc.focusCategoryId) : null;
+    const settingsDoc = await firstSettings(ctx, userId);
+    const focus = settingsDoc ? await requireOwned(ctx, "focusCategories", settingsDoc.focusCategoryId, userId) : null;
     const tasks = await ctx.db
       .query("tasks")
-      .withIndex("by_status_and_completedAt", (q) =>
-        q.eq("status", "done").gte("completedAt", from).lte("completedAt", to),
+      .withIndex("by_user_status_and_completedAt", (q) =>
+        q.eq("userId", userId).eq("status", "done").gte("completedAt", from).lte("completedAt", to),
       )
       .take(200);
     const sessions = focus
       ? await ctx.db
           .query("focusSessions")
-          .withIndex("by_category_and_completedAt", (q) =>
-            q.eq("categoryId", focus._id).gte("completedAt", from).lte("completedAt", to),
+          .withIndex("by_user_category_and_completedAt", (q) =>
+            q.eq("userId", userId).eq("categoryId", focus._id).gte("completedAt", from).lte("completedAt", to),
           )
           .take(200)
       : [];
     const transactions = await ctx.db
       .query("transactions")
-      .withIndex("by_status_and_occurredAt", (q) =>
-        q.eq("status", "confirmed").gte("occurredAt", from).lte("occurredAt", to),
+      .withIndex("by_user_status_and_occurredAt", (q) =>
+        q.eq("userId", userId).eq("status", "confirmed").gte("occurredAt", from).lte("occurredAt", to),
       )
       .take(200);
     const reflections = await ctx.db
       .query("reflections")
-      .withIndex("by_reflectedAt", (q) => q.gte("reflectedAt", from).lte("reflectedAt", to))
+      .withIndex("by_user_and_reflectedAt", (q) => q.eq("userId", userId).gte("reflectedAt", from).lte("reflectedAt", to))
       .take(100);
     const [currentInsight] = await ctx.db
       .query("weeklyInsights")
-      .withIndex("by_status_and_createdAt", (q) => q.eq("status", "new"))
+      .withIndex("by_user_status_and_createdAt", (q) => q.eq("userId", userId).eq("status", "new"))
       .order("desc")
       .take(1);
     const [appliedInsight] = await ctx.db
       .query("weeklyInsights")
-      .withIndex("by_status_and_createdAt", (q) => q.eq("status", "applied"))
+      .withIndex("by_user_status_and_createdAt", (q) => q.eq("userId", userId).eq("status", "applied"))
       .order("desc")
       .take(1);
     const [dismissedInsight] = await ctx.db
       .query("weeklyInsights")
-      .withIndex("by_status_and_createdAt", (q) => q.eq("status", "dismissed"))
+      .withIndex("by_user_status_and_createdAt", (q) => q.eq("userId", userId).eq("status", "dismissed"))
       .order("desc")
       .take(1);
     const focusMinutes = sessions.reduce((total, session) => total + session.durationMinutes, 0);
     const expenses = transactions.filter((item) => (item.type ?? "expense") === "expense");
+    const incomes = transactions.filter((item) => (item.type ?? "expense") === "income");
     const categoryTotals = new Map<string, number>();
     for (const item of expenses) categoryTotals.set(item.category, (categoryTotals.get(item.category) ?? 0) + item.amount);
     const tagTotals = new Map<string, number>();
@@ -611,8 +709,34 @@ export const insights = query({
     }
     const computed = currentInsight || dismissedInsight ? { insight: null, requirement: null } : computedFocusTimeInsight(focus, sessions);
 
+    // Bucket focus minutes and spend across the range so the screen can draw a trend.
+    const spanMs = Math.max(1, to - from);
+    const spanDays = Math.ceil(spanMs / (24 * MS_PER_HOUR));
+    const bucketMs = spanDays <= 14 ? 24 * MS_PER_HOUR : spanDays <= 92 ? 7 * 24 * MS_PER_HOUR : 30 * 24 * MS_PER_HOUR;
+    const bucketCount = Math.max(1, Math.min(24, Math.ceil(spanMs / bucketMs)));
+    const trend = Array.from({ length: bucketCount }, (_, index) => ({
+      bucketMs,
+      minutes: 0,
+      sessions: 0,
+      spent: 0,
+      start: from + index * bucketMs,
+    }));
+    const bucketFor = (time: number) => Math.max(0, Math.min(bucketCount - 1, Math.floor((time - from) / bucketMs)));
+    for (const session of sessions) {
+      const bucket = trend[bucketFor(session.completedAt)];
+      bucket.minutes += session.durationMinutes;
+      bucket.sessions += 1;
+    }
+    for (const item of expenses) trend[bucketFor(item.occurredAt)].spent += item.amount;
+
+    const spent = expenses.reduce((total, item) => total + item.amount, 0);
+    const activeDays = new Set(sessions.map((session) => localDateKey(session.completedAt))).size;
+
     return {
+      activeDays,
       appliedInsight: appliedInsight ?? null,
+      avgSessionMinutes: sessions.length ? Math.round(focusMinutes / sessions.length) : 0,
+      avgSpendPerDay: Math.round(spent / Math.max(1, spanDays)),
       categorySummary: [...categoryTotals.entries()]
         .map(([category, amount]) => ({ amount, category }))
         .sort((a, b) => b.amount - a.amount)
@@ -622,12 +746,15 @@ export const insights = query({
       focusCategoryName: focus?.name ?? "Focus",
       focusMinutes,
       focusSessions: sessions.length,
+      income: incomes.reduce((total, item) => total + item.amount, 0),
       insightRequirement: computed.requirement,
+      net: incomes.reduce((total, item) => total + item.amount, 0) - spent,
       reflectionSummary: [...tagTotals.entries()]
         .map(([tag, count]) => ({ count, tag }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5),
-      spent: expenses.reduce((total, item) => total + item.amount, 0),
+      spent,
+      trend,
     };
   },
 });
@@ -636,6 +763,8 @@ export const setWeeklyInsightStatus = mutation({
   args: { insightId: v.id("weeklyInsights"), status: weeklyInsightStatus },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwned(ctx, "weeklyInsights", args.insightId, userId);
     await ctx.db.patch(args.insightId, { status: args.status });
     return null;
   },
@@ -651,15 +780,16 @@ export const applyWeeklyInsight = mutation({
   },
   returns: v.id("weeklyInsights"),
   handler: async (ctx, args) => {
-    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    const userId = await requireUserId(ctx);
+    const settingsDoc = await firstSettings(ctx, userId);
     if (!settingsDoc) throw new Error("App settings are required before applying insights.");
-    const focus = await ctx.db.get(settingsDoc.focusCategoryId);
-    if (!focus) throw new Error("Focus category is required before applying insights.");
+    const focus = await requireOwned(ctx, "focusCategories", settingsDoc.focusCategoryId, userId);
     const actionHour = Math.max(0, Math.min(23, Math.round(args.actionHour)));
     const previousHour = focus.preferredHour;
     await ctx.db.patch(focus._id, { preferredHour: actionHour });
 
     if (args.insightId) {
+      await requireOwned(ctx, "weeklyInsights", args.insightId, userId);
       await ctx.db.patch(args.insightId, {
         actionHour,
         actionType: "move_focus_reminder",
@@ -680,6 +810,7 @@ export const applyWeeklyInsight = mutation({
       previousHour,
       status: "applied",
       suggestedAction: args.suggestedAction,
+      userId,
     });
   },
 });
@@ -694,7 +825,9 @@ export const dismissWeeklyInsight = mutation({
   },
   returns: v.id("weeklyInsights"),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     if (args.insightId) {
+      await requireOwned(ctx, "weeklyInsights", args.insightId, userId);
       await ctx.db.patch(args.insightId, { status: "dismissed" });
       return args.insightId;
     }
@@ -706,6 +839,7 @@ export const dismissWeeklyInsight = mutation({
       observation: args.observation,
       status: "dismissed",
       suggestedAction: args.suggestedAction,
+      userId,
     });
   },
 });
@@ -714,10 +848,12 @@ export const undoWeeklyInsight = mutation({
   args: { insightId: v.id("weeklyInsights") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const insight = await ctx.db.get(args.insightId);
-    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
-    if (!insight || !settingsDoc || insight.actionType !== "move_focus_reminder") return null;
+    const userId = await requireUserId(ctx);
+    const insight = await requireOwned(ctx, "weeklyInsights", args.insightId, userId);
+    const settingsDoc = await firstSettings(ctx, userId);
+    if (!settingsDoc || insight.actionType !== "move_focus_reminder") return null;
     if (insight.previousHour !== undefined) {
+      await requireOwned(ctx, "focusCategories", settingsDoc.focusCategoryId, userId);
       await ctx.db.patch(settingsDoc.focusCategoryId, { preferredHour: insight.previousHour });
     }
     await ctx.db.patch(args.insightId, {
@@ -739,6 +875,7 @@ export const addTask = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     const title = args.title.trim();
     if (title) await ctx.db.insert("tasks", {
       location: args.location?.trim() || undefined,
@@ -751,6 +888,7 @@ export const addTask = mutation({
       scheduledAt: args.scheduledAt,
       title,
       status: "planned",
+      userId,
     });
     return null;
   },
@@ -766,6 +904,8 @@ export const scheduleTask = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwned(ctx, "tasks", args.taskId, userId);
     await ctx.db.patch(args.taskId, {
       location: args.location?.trim() || undefined,
       meetingLink: args.meetingLink?.trim() || undefined,
@@ -780,11 +920,13 @@ export const addReflection = mutation({
   args: { note: v.string(), tags: v.array(v.string()) },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     if (!args.note.trim() && args.tags.length === 0) return null;
     await ctx.db.insert("reflections", {
       note: args.note.trim() || undefined,
       reflectedAt: Date.now(),
       tags: args.tags,
+      userId,
     });
     return null;
   },
@@ -794,10 +936,11 @@ export const moveUnfinishedTasks = mutation({
   args: { exceptText: v.optional(v.string()), scheduledAt: v.number() },
   returns: v.number(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     const except = args.exceptText?.trim().toLowerCase();
     const tasks = await ctx.db
       .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", "planned"))
+      .withIndex("by_user_and_status", (q) => q.eq("userId", userId).eq("status", "planned"))
       .take(100);
     let moved = 0;
     for (const item of tasks) {
@@ -813,15 +956,16 @@ export const dismissReflection = mutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
     const now = Date.now();
     const dateKey = localDateKey(now);
     const existing = await ctx.db
       .query("reflectionDismissals")
-      .withIndex("by_dateKey", (q) => q.eq("dateKey", dateKey))
+      .withIndex("by_user_and_dateKey", (q) => q.eq("userId", userId).eq("dateKey", dateKey))
       .order("desc")
       .first();
     if (existing) await ctx.db.patch(existing._id, { action: "skip", createdAt: now, snoozeUntil: undefined });
-    else await ctx.db.insert("reflectionDismissals", { action: "skip", createdAt: now, dateKey });
+    else await ctx.db.insert("reflectionDismissals", { action: "skip", createdAt: now, dateKey, userId });
     return null;
   },
 });
@@ -830,11 +974,12 @@ export const snoozeReflection = mutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
     const now = Date.now();
     const dateKey = localDateKey(now);
     const existing = await ctx.db
       .query("reflectionDismissals")
-      .withIndex("by_dateKey", (q) => q.eq("dateKey", dateKey))
+      .withIndex("by_user_and_dateKey", (q) => q.eq("userId", userId).eq("dateKey", dateKey))
       .order("desc")
       .first();
     if (existing?.action === "snooze") {
@@ -843,7 +988,7 @@ export const snoozeReflection = mutation({
     }
     const snoozeUntil = now + 30 * 60 * 1000;
     if (existing) await ctx.db.patch(existing._id, { action: "snooze", createdAt: now, snoozeUntil });
-    else await ctx.db.insert("reflectionDismissals", { action: "snooze", createdAt: now, dateKey, snoozeUntil });
+    else await ctx.db.insert("reflectionDismissals", { action: "snooze", createdAt: now, dateKey, snoozeUntil, userId });
     return null;
   },
 });
@@ -855,10 +1000,11 @@ export const focusState = query({
     focusCategory: v.union(focusCategory, v.null()),
   }),
   handler: async (ctx) => {
-    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
+    const userId = await requireUserId(ctx);
+    const settingsDoc = await firstSettings(ctx, userId);
     return {
-      activeTimer: await firstActiveTimer(ctx),
-      focusCategory: settingsDoc ? await ctx.db.get(settingsDoc.focusCategoryId) : null,
+      activeTimer: await firstActiveTimer(ctx, userId),
+      focusCategory: settingsDoc ? await requireOwned(ctx, "focusCategories", settingsDoc.focusCategoryId, userId) : null,
     };
   },
 });
@@ -867,13 +1013,15 @@ export const startFocus = mutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const current = await ctx.db.query("appSettings").order("desc").first();
-    if (!current || (await firstActiveTimer(ctx))) return null;
+    const userId = await requireUserId(ctx);
+    const current = await firstSettings(ctx, userId);
+    if (!current || (await firstActiveTimer(ctx, userId))) return null;
     await ctx.db.insert("activeTimers", {
       categoryId: current.focusCategoryId,
       elapsedSeconds: 0,
       startedAt: Date.now(),
       status: "running",
+      userId,
     });
     return null;
   },
@@ -883,8 +1031,8 @@ export const setFocusPaused = mutation({
   args: { paused: v.boolean(), timerId: v.id("activeTimers") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const timer = await ctx.db.get(args.timerId);
-    if (!timer) return null;
+    const userId = await requireUserId(ctx);
+    const timer = await requireOwned(ctx, "activeTimers", args.timerId, userId);
     const now = Date.now();
     const elapsedSeconds =
       timer.status === "running"
@@ -903,8 +1051,8 @@ export const endFocus = mutation({
   args: { timerId: v.id("activeTimers") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const timer = await ctx.db.get(args.timerId);
-    if (!timer) return null;
+    const userId = await requireUserId(ctx);
+    const timer = await requireOwned(ctx, "activeTimers", args.timerId, userId);
     const now = Date.now();
     const elapsedSeconds =
       timer.status === "running"
@@ -915,6 +1063,7 @@ export const endFocus = mutation({
       completedAt: now,
       durationMinutes: Math.max(1, Math.round(elapsedSeconds / 60)),
       source: "timer",
+      userId,
     });
     await ctx.db.delete(args.timerId);
     return null;
@@ -925,13 +1074,15 @@ export const addManualFocus = mutation({
   args: { minutes: v.number() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const current = await ctx.db.query("appSettings").order("desc").first();
+    const userId = await requireUserId(ctx);
+    const current = await firstSettings(ctx, userId);
     if (!current) return null;
     await ctx.db.insert("focusSessions", {
       categoryId: current.focusCategoryId,
       completedAt: Date.now(),
       durationMinutes: Math.max(1, Math.min(600, Math.round(args.minutes))),
       source: "manual",
+      userId,
     });
     return null;
   },
@@ -941,18 +1092,19 @@ export const ensureMoneyDefaults = mutation({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    if (!(await firstAccount(ctx))) {
-      await ctx.db.insert("accounts", { balance: 0, name: "Wallet" });
+    const userId = await requireUserId(ctx);
+    if (!(await firstAccount(ctx, userId))) {
+      await ctx.db.insert("accounts", { balance: 0, name: "Wallet", userId });
     }
     const existingExpenses = await ctx.db
       .query("transactionCategories")
-      .withIndex("by_type", (q) => q.eq("type", "expense"))
+      .withIndex("by_user_and_type", (q) => q.eq("userId", userId).eq("type", "expense"))
       .take(1);
     if (!existingExpenses.length) {
       for (const name of ["Food", "Bills", "Travel", "Shopping"]) {
-        await ctx.db.insert("transactionCategories", { name, type: "expense" });
+        await ctx.db.insert("transactionCategories", { name, type: "expense", userId });
       }
-      await ctx.db.insert("transactionCategories", { name: "Salary", type: "income" });
+      await ctx.db.insert("transactionCategories", { name: "Salary", type: "income", userId });
     }
     return null;
   },
@@ -973,8 +1125,10 @@ export const addExpense = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     if (!Number.isFinite(args.amount) || args.amount <= 0) return null;
-    const fallbackAccount = args.accountId ? null : await firstAccount(ctx);
+    if (args.accountId) await requireOwned(ctx, "accounts", args.accountId, userId);
+    const fallbackAccount = args.accountId ? null : await firstAccount(ctx, userId);
     await ctx.db.insert("transactions", {
       accountId: args.accountId ?? fallbackAccount?._id,
       amount: Math.round(args.amount),
@@ -986,6 +1140,7 @@ export const addExpense = mutation({
       source: args.source ?? "manual",
       status: args.status ?? "pending",
       type: args.type ?? "expense",
+      userId,
     });
     return null;
   },
@@ -995,10 +1150,11 @@ export const detectPaymentNotification = mutation({
   args: { occurredAt: v.optional(v.number()), text: v.string() },
   returns: v.union(v.id("transactions"), v.null()),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     const rawText = args.text.trim();
     if (!rawText) return null;
     const lower = rawText.toLowerCase();
-    const amountMatch = lower.match(/(?:rs|inr|₹)\s*([\d,]+)|([\d,]+)\s*(?:rs|inr)/i);
+    const amountMatch = lower.match(/(?:rs|inr|\u20b9)\s*([\d,]+)|([\d,]+)\s*(?:rs|inr)/i);
     const amount = Number((amountMatch?.[1] ?? amountMatch?.[2] ?? "").replace(/,/g, ""));
     if (!Number.isFinite(amount) || amount <= 0) return null;
     const occurredAt = args.occurredAt ?? Date.now();
@@ -1008,12 +1164,12 @@ export const detectPaymentNotification = mutation({
     const key = detectionKey(amount, merchant, occurredAt);
     const existing = await ctx.db
       .query("transactions")
-      .withIndex("by_detectionKey", (q) => q.eq("detectionKey", key))
+      .withIndex("by_user_and_detectionKey", (q) => q.eq("userId", userId).eq("detectionKey", key))
       .first();
     if (existing) return existing._id;
 
     const failed = /(failed|declined|unsuccessful|reversed|refund|refunded)/.test(lower);
-    const fallbackAccount = await firstAccount(ctx);
+    const fallbackAccount = await firstAccount(ctx, userId);
     const transactionId = await ctx.db.insert("transactions", {
       accountId: fallbackAccount?._id,
       amount: Math.round(amount),
@@ -1028,6 +1184,7 @@ export const detectPaymentNotification = mutation({
       source: "notification",
       status: failed ? "ignored" : "pending",
       type: "expense",
+      userId,
     });
     return failed ? null : transactionId;
   },
@@ -1043,31 +1200,33 @@ export const calendar = query({
       completedAt: v.number(),
       durationMinutes: v.number(),
       source: v.union(v.literal("timer"), v.literal("manual")),
+      userId: v.optional(v.id("users")),
     })),
     scheduledTasks: v.array(task),
     unscheduledTasks: v.array(task),
   }),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     const from = Math.max(0, Math.min(args.from, args.to));
     const to = Math.min(Math.max(args.from, args.to), from + 31 * 24 * MS_PER_HOUR);
     const scheduledTasks = await ctx.db
       .query("tasks")
-      .withIndex("by_status_and_scheduledAt", (q) =>
-        q.eq("status", "planned").gte("scheduledAt", from).lte("scheduledAt", to),
+      .withIndex("by_user_status_and_scheduledAt", (q) =>
+        q.eq("userId", userId).eq("status", "planned").gte("scheduledAt", from).lte("scheduledAt", to),
       )
       .take(100);
-    const focus = await ctx.db.query("appSettings").order("desc").first();
+    const focus = await firstSettings(ctx, userId);
     const focusSessions = focus
       ? await ctx.db
           .query("focusSessions")
-          .withIndex("by_category_and_completedAt", (q) =>
-            q.eq("categoryId", focus.focusCategoryId).gte("completedAt", from).lte("completedAt", to),
+          .withIndex("by_user_category_and_completedAt", (q) =>
+            q.eq("userId", userId).eq("categoryId", focus.focusCategoryId).gte("completedAt", from).lte("completedAt", to),
           )
           .take(100)
       : [];
     const unscheduledTasks = (await ctx.db
       .query("tasks")
-      .withIndex("by_status", (q) => q.eq("status", "planned"))
+      .withIndex("by_user_and_status", (q) => q.eq("userId", userId).eq("status", "planned"))
       .take(50)).filter((item) => item.scheduledAt === undefined);
 
     return {
@@ -1091,22 +1250,24 @@ export const money = query({
     summary: v.array(v.object({ amount: v.number(), category: v.string(), type: v.union(v.literal("expense"), v.literal("income")) })),
   }),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
-    const settingsDoc = await ctx.db.query("appSettings").order("desc").first();
-    const accounts = (await ctx.db.query("accounts").take(50)).filter((item) => !item.archived);
+    const settingsDoc = await firstSettings(ctx, userId);
+    const accounts = (await ctx.db.query("accounts").withIndex("by_user", (q) => q.eq("userId", userId)).take(50)).filter((item) => !item.archived);
+    if (args.accountId) await requireOwned(ctx, "accounts", args.accountId, userId);
     const fallbackAccountId = accounts[0]?._id;
     const confirmed = await ctx.db
       .query("transactions")
-      .withIndex("by_status_and_occurredAt", (q) =>
-        q.eq("status", "confirmed").gte("occurredAt", monthStart).lt("occurredAt", monthEnd),
+      .withIndex("by_user_status_and_occurredAt", (q) =>
+        q.eq("userId", userId).eq("status", "confirmed").gte("occurredAt", monthStart).lt("occurredAt", monthEnd),
       )
       .order("desc")
       .take(50);
     const pending = await ctx.db
       .query("transactions")
-      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .withIndex("by_user_and_status", (q) => q.eq("userId", userId).eq("status", "pending"))
       .order("desc")
       .take(20);
     const visibleConfirmed = args.accountId
@@ -1132,7 +1293,7 @@ export const money = query({
     return {
       accounts: accounts.map((item) => ({ ...item, baseBalance: item.balance, balance: accountTotals.get(item._id) ?? item.balance })),
       budget: settingsDoc?.monthlyBudget ?? 0,
-      categories: await ctx.db.query("transactionCategories").take(50),
+      categories: await ctx.db.query("transactionCategories").withIndex("by_user_and_type", (q) => q.eq("userId", userId)).take(50),
       confirmed: visibleConfirmed,
       netWorth: [...accountTotals.values()].reduce((total, value) => total + value, 0),
       pending: visiblePending,
@@ -1159,6 +1320,9 @@ export const updateTransaction = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwned(ctx, "transactions", args.transactionId, userId);
+    if (args.accountId) await requireOwned(ctx, "accounts", args.accountId, userId);
     const patch: Partial<{
       accountId: typeof args.accountId;
       amount: number;
@@ -1192,6 +1356,8 @@ export const removeTransaction = mutation({
   args: { transactionId: v.id("transactions") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwned(ctx, "transactions", args.transactionId, userId);
     await ctx.db.delete(args.transactionId);
     return null;
   },
@@ -1201,8 +1367,9 @@ export const addAccount = mutation({
   args: { balance: v.number(), name: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     const name = args.name.trim();
-    if (name && Number.isFinite(args.balance)) await ctx.db.insert("accounts", { balance: Math.round(args.balance), name });
+    if (name && Number.isFinite(args.balance)) await ctx.db.insert("accounts", { balance: Math.round(args.balance), name, userId });
     return null;
   },
 });
@@ -1211,6 +1378,8 @@ export const updateAccount = mutation({
   args: { accountId: v.id("accounts"), balance: v.optional(v.number()), name: v.optional(v.string()) },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwned(ctx, "accounts", args.accountId, userId);
     const patch: Partial<{ balance: number; name: string }> = {};
     if (args.balance !== undefined && Number.isFinite(args.balance)) patch.balance = Math.round(args.balance);
     if (args.name !== undefined && args.name.trim()) patch.name = args.name.trim();
@@ -1223,6 +1392,8 @@ export const archiveAccount = mutation({
   args: { accountId: v.id("accounts") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwned(ctx, "accounts", args.accountId, userId);
     await ctx.db.patch(args.accountId, { archived: true });
     return null;
   },
@@ -1232,8 +1403,9 @@ export const addCategory = mutation({
   args: { name: v.string(), type: v.union(v.literal("expense"), v.literal("income")) },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
     const name = args.name.trim();
-    if (name) await ctx.db.insert("transactionCategories", { name, type: args.type });
+    if (name) await ctx.db.insert("transactionCategories", { name, type: args.type, userId });
     return null;
   },
 });
@@ -1242,6 +1414,8 @@ export const removeCategory = mutation({
   args: { categoryId: v.id("transactionCategories") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireOwned(ctx, "transactionCategories", args.categoryId, userId);
     await ctx.db.delete(args.categoryId);
     return null;
   },
